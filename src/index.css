@@ -1,13 +1,62 @@
-body {
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Cinzel:wght@400;600;700&family=Raleway:wght@300;400;500&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+:root {
+  --noir:       #080808;
+  --noir-soft:  #0e0e0e;
+  --noir-card:  #111114;
+  --bleu-nuit:  #0d1117;
+  --bleu-acier: #1a2535;
+  --or:         #c9a84c;
+  --or-pale:    #e8d49a;
+  --or-sombre:  #7a6030;
+  --or-glow:    rgba(201,168,76,0.15);
+  --or-border:  rgba(201,168,76,0.3);
+  --texte:      #d4cfc5;
+  --texte-soft: #8a8578;
+  --rouge-sang: #8b1a1a;
+  --vert-ok:    #2a6e4a;
+  --orange-warn:#8a5c1a;
+
+  --font-titre:  'Cinzel', serif;
+  --font-corps:  'Cormorant Garamond', serif;
+  --font-ui:     'Raleway', sans-serif;
+
+  --radius:      4px;
+  --radius-lg:   8px;
+  --transition:  0.25s ease;
 }
+
+html, body, #root {
+  height: 100%;
+  background: var(--noir);
+  color: var(--texte);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+button {
+  font-family: var(--font-ui);
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+
+input, select, textarea {
+  font-family: var(--font-ui);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--noir); }
+::-webkit-scrollbar-thumb { background: var(--or-sombre); border-radius: 2px; }
+
+::selection { background: var(--or-glow); color: var(--or-pale); }

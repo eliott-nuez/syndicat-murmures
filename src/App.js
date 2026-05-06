@@ -1,25 +1,72 @@
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import './index.css'
+import './App.css'
 
-function App() {
+import LandingPage    from './pages/LandingPage'
+import LoginPage      from './pages/LoginPage'
+import Dashboard      from './pages/Dashboard'
+import FichePerso     from './pages/FichePerso'
+import RecapGlobal    from './pages/RecapGlobal'
+import Stock          from './pages/Stock'
+import Tricount       from './pages/Tricount'
+import Blanchiment    from './pages/Blanchiment'
+import Administration from './pages/Administration'
+import FicheMembre    from './pages/FicheMembre'
+import Drogues        from './pages/Drogues'
+import Layout         from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
+
+function AppLayout({ children, roles }) {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+    <ProtectedRoute roles={roles}>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
+  )
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public */}
+        <Route path="/"      element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Tous membres connectés */}
+        <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
+        <Route path="/fiche"     element={<AppLayout><FichePerso /></AppLayout>} />
+
+        {/* Responsable + Direction */}
+        <Route path="/recap-global" element={
+          <AppLayout roles={['responsable','direction']}>
+            <RecapGlobal />
+          </AppLayout>
+        } />
+
+        {/* Responsable + Direction */}
+        <Route path="/stock" element={
+          <AppLayout roles={['responsable','direction']}><Stock /></AppLayout>
+        } />
+
+        {/* Direction uniquement */}
+        <Route path="/drogues" element={
+          <AppLayout roles={['direction']}><Drogues /></AppLayout>
+        } />
+        <Route path="/tricount" element={
+          <AppLayout roles={['direction']}><Tricount /></AppLayout>
+        } />
+        <Route path="/blanchiment" element={
+          <AppLayout roles={['direction']}><Blanchiment /></AppLayout>
+        } />
+        <Route path="/admin" element={
+          <AppLayout roles={['direction']}><Administration /></AppLayout>
+        } />
+        <Route path="/fiche-membre" element={
+          <AppLayout roles={['direction']}><FicheMembre /></AppLayout>
+        } />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
