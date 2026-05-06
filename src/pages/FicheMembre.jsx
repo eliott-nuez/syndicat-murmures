@@ -10,6 +10,11 @@ const COOLDOWNS_H = {
 
 const COMMISSION_PCT = 10
 
+function localNow() {
+  const d = new Date()
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
 export default function FicheMembre() {
   const [membres, setMembres]     = useState([])
   const [membreId, setMembreId]   = useState('')
@@ -18,19 +23,20 @@ export default function FicheMembre() {
   const [drogues, setDrogues]     = useState([])
   const [activites, setActivites] = useState([])
   const [ventes, setVentes]       = useState([])
+  const [commissions, setCommissions] = useState({})
   const [msg, setMsg]             = useState({ type: '', text: '' })
 
   const [formAct, setFormAct] = useState({
     type_code:         'ATM',
     somme_argent_sale: '',
     note:              '',
-    heure_faite:       new Date().toISOString().slice(0, 16),
+    heure_faite:       localNow(),
   })
   const [savingAct, setSavingAct] = useState(false)
   const [lignesVente, setLignesVente] = useState([emptyLigne()])
 
   function emptyLigne() {
-    return { drogue_id: '', quantite: '', argent_sale: '', statut: 'Vendu', _id: Math.random() }
+    return { drogue_id: '', quantite: '', prix_unitaire: '', statut: 'Vendu', _id: Math.random() }
   }
 
   const getDebutSemaine = () => {
@@ -41,29 +47,33 @@ export default function FicheMembre() {
     return d
   }
 
-  // Charger liste membres + drogues au montage
   useEffect(() => {
     supabase.from('membres').select('id, surnom, rang').order('surnom')
       .then(({ data }) => setMembres(data || []))
     supabase.from('drogues').select('*').order('nom')
       .then(({ data }) => setDrogues(data || []))
+    supabase.from('parametres').select('*')
+      .then(({ data }) => {
+        const map = {}
+        ;(data || []).forEach(p => {
+          if (p.cle.startsWith('commission_')) map[p.cle.replace('commission_', '')] = Number(p.valeur)
+        })
+        setCommissions(map)
+      })
   }, [])
 
-  // Recharger activités/ventes quand le membre change
   useEffect(() => {
     if (!membreId) { setActivites([]); setVentes([]); return }
     fetchActivites()
     fetchVentes()
     setMsg({ type: '', text: '' })
-    setFormAct({ type_code: 'ATM', somme_argent_sale: '', note: '', heure_faite: new Date().toISOString().slice(0, 16) })
+    setFormAct({ type_code: 'ATM', somme_argent_sale: '', note: '', heure_faite: localNow() })
     setLignesVente([emptyLigne()])
   }, [membreId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchActivites = async () => {
     const { data } = await supabase
-      .from('activites')
-      .select('*')
-      .eq('membre_id', membreId)
+      .from('activites').select('*').eq('membre_id', membreId)
       .gte('created_at', getDebutSemaine().toISOString())
       .order('heure_faite', { ascending: false })
     setActivites(data || [])
@@ -71,8 +81,7 @@ export default function FicheMembre() {
 
   const fetchVentes = async () => {
     const { data } = await supabase
-      .from('ventes_drogue')
-      .select('*, drogues(nom, prix_revient)')
+      .from('ventes_drogue').select('*, drogues(nom, prix_revient)')
       .eq('membre_id', membreId)
       .gte('created_at', getDebutSemaine().toISOString())
       .order('created_at', { ascending: false })
@@ -91,25 +100,19 @@ export default function FicheMembre() {
     if (!membreId) return
     setSavingAct(true)
     setMsg({ type: '', text: '' })
-
     const heure_faite    = new Date(formAct.heure_faite).toISOString()
     const prochain_dispo = calcProchainDispo(heure_faite, formAct.type_code)
-
     const { error } = await supabase.from('activites').insert({
-      membre_id:         membreId,
-      type_code:         formAct.type_code,
-      heure_faite,
-      prochain_dispo,
+      membre_id: membreId, type_code: formAct.type_code,
+      heure_faite, prochain_dispo,
       somme_argent_sale: parseFloat(formAct.somme_argent_sale) || 0,
-      note:              formAct.note || null,
+      note: formAct.note || null,
     })
-
     setSavingAct(false)
-    if (error) {
-      setMsg({ type: 'error', text: 'Erreur : ' + error.message })
-    } else {
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }) }
+    else {
       setMsg({ type: 'success', text: `Activité enregistrée pour ${membre.surnom}.` })
-      setFormAct({ ...formAct, somme_argent_sale: '', note: '', heure_faite: new Date().toISOString().slice(0, 16) })
+      setFormAct({ ...formAct, somme_argent_sale: '', note: '', heure_faite: localNow() })
       fetchActivites()
     }
   }
@@ -119,19 +122,21 @@ export default function FicheMembre() {
     setMsg({ type: '', text: '' })
     const lignesValides = lignesVente.filter(l => l.drogue_id && l.quantite)
     if (!lignesValides.length) return
-
     const rows = lignesValides.map(l => {
       const drogue = drogues.find(d => d.id === l.drogue_id)
       const qte    = parseInt(l.quantite) || 0
-      let argent   = parseFloat(l.argent_sale) || 0
-      if (l.statut === 'Saisie') argent = -(qte * (drogue?.prix_revient || 0))
+      let argent   = 0
+      if (l.statut === 'Saisie') {
+        argent = -(qte * (drogue?.prix_revient || 0))
+      } else {
+        const prixVente = parseFloat(l.prix_unitaire) || 0
+        argent = (prixVente - (drogue?.prix_revient || 0)) * qte
+      }
       return { membre_id: membreId, drogue_id: l.drogue_id, quantite: qte, argent_sale: argent, statut: l.statut }
     })
-
     const { error } = await supabase.from('ventes_drogue').insert(rows)
-    if (error) {
-      setMsg({ type: 'error', text: 'Erreur ventes : ' + error.message })
-    } else {
+    if (error) { setMsg({ type: 'error', text: 'Erreur ventes : ' + error.message }) }
+    else {
       setMsg({ type: 'success', text: `Ventes enregistrées pour ${membre.surnom}.` })
       setLignesVente([emptyLigne()])
       fetchVentes()
@@ -147,12 +152,13 @@ export default function FicheMembre() {
     })
   }
 
-  const totalAct    = activites.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-  const totalVentes = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
-  const totalSaisies = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
-  const brut        = totalAct + totalVentes
-  const commission  = totalVentes * COMMISSION_PCT / 100
-  const net         = brut - commission
+  const commissionPct  = membre ? (commissions[membre.rang] ?? COMMISSION_PCT) : COMMISSION_PCT
+  const totalAct       = activites.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
+  const totalVentes    = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
+  const totalSaisies   = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
+  const brut           = totalAct + totalVentes
+  const commission     = totalVentes * commissionPct / 100
+  const net            = brut - commission
 
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -162,41 +168,24 @@ export default function FicheMembre() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-      {/* Titre */}
       <div>
-        <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.25em', color: 'var(--or-sombre)', marginBottom: 6 }}>
-          Direction
-        </div>
-        <h1 style={{ fontFamily: 'var(--font-titre)', fontSize: 24, color: 'var(--or-pale)', letterSpacing: '0.05em' }}>
-          Fiche membre
-        </h1>
+        <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.25em', color: 'var(--or-sombre)', marginBottom: 6 }}>Direction</div>
+        <h1 style={{ fontFamily: 'var(--font-titre)', fontSize: 24, color: 'var(--or-pale)', letterSpacing: '0.05em' }}>Fiche membre</h1>
       </div>
 
       {/* Sélecteur membre */}
       <div className="card">
         <div className="card-title">Sélectionner un membre</div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            className="form-select"
-            style={{ minWidth: 240 }}
-            value={membreId}
-            onChange={e => setMembreId(e.target.value)}
-          >
+          <select className="form-select" style={{ minWidth: 240 }} value={membreId}
+            onChange={e => setMembreId(e.target.value)}>
             <option value="">— Choisir un membre —</option>
-            {membres.map(m => (
-              <option key={m.id} value={m.id}>
-                {m.surnom} ({m.rang})
-              </option>
-            ))}
+            {membres.map(m => <option key={m.id} value={m.id}>{m.surnom} ({m.rang})</option>)}
           </select>
           {membre && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className={`badge ${membre.rang === 'direction' ? 'badge-or' : membre.rang === 'responsable' ? 'badge-bleu' : 'badge-gris'}`}
-                style={membre.rang === 'direction' ? { background: 'var(--or-glow)', color: 'var(--or)', border: '1px solid var(--or-border)' } : {}}>
-                {membre.rang}
-              </span>
-              <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>Prise en main active</span>
-            </div>
+            <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+              Prise en main · commission {commissionPct}%
+            </span>
           )}
         </div>
       </div>
@@ -211,14 +200,13 @@ export default function FicheMembre() {
         <>
           {msg.text && <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`}>{msg.text}</div>}
 
-          {/* Récap chiffres semaine */}
           <div className="grid-3">
             <div className="stat-box">
               <span className="stat-label">Total brut</span>
               <span className="stat-value">{fmt(brut)}</span>
             </div>
             <div className="stat-box">
-              <span className="stat-label">Commission ({COMMISSION_PCT}%)</span>
+              <span className="stat-label">Commission ({commissionPct}%)</span>
               <span className="stat-value" style={{ color: '#e8a84c' }}>− {fmt(commission)}</span>
             </div>
             <div className="stat-box">
@@ -234,10 +222,8 @@ export default function FicheMembre() {
               <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
                 <div className="form-group">
                   <label className="form-label">Type d'activité</label>
-                  <select className="form-select"
-                    value={formAct.type_code}
-                    onChange={e => setFormAct({ ...formAct, type_code: e.target.value })}
-                  >
+                  <select className="form-select" value={formAct.type_code}
+                    onChange={e => setFormAct({ ...formAct, type_code: e.target.value })}>
                     {Object.keys(COOLDOWNS_H).map(t => (
                       <option key={t} value={t}>{t} — cooldown {COOLDOWNS_H[t]}h</option>
                     ))}
@@ -245,38 +231,29 @@ export default function FicheMembre() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Heure effectuée</label>
-                  <input className="form-input" type="datetime-local"
+                  <input className="form-input" type="datetime-local" required
                     value={formAct.heure_faite}
-                    onChange={e => setFormAct({ ...formAct, heure_faite: e.target.value })}
-                    required
-                  />
+                    onChange={e => setFormAct({ ...formAct, heure_faite: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Somme récoltée ($)</label>
-                  <input className="form-input" type="number" min="0" step="1"
+                  <input className="form-input" type="number" min="0" step="1" required
                     placeholder="Ex : 4500"
                     value={formAct.somme_argent_sale}
-                    onChange={e => setFormAct({ ...formAct, somme_argent_sale: e.target.value })}
-                    required
-                  />
+                    onChange={e => setFormAct({ ...formAct, somme_argent_sale: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Prochaine dispo (auto)</label>
-                  <input className="form-input" type="text" disabled
+                  <input className="form-input" type="text" disabled style={{ opacity: 0.5 }}
                     value={formAct.heure_faite
                       ? fmtDate(calcProchainDispo(new Date(formAct.heure_faite), formAct.type_code))
-                      : '—'}
-                    style={{ opacity: 0.5 }}
-                  />
+                      : '—'} />
                 </div>
               </div>
               <div className="form-group" style={{ marginBottom: 16 }}>
                 <label className="form-label">Note (facultatif)</label>
-                <input className="form-input" type="text"
-                  placeholder="Remarque, lieu, etc."
-                  value={formAct.note}
-                  onChange={e => setFormAct({ ...formAct, note: e.target.value })}
-                />
+                <input className="form-input" type="text" placeholder="Remarque, lieu, etc."
+                  value={formAct.note} onChange={e => setFormAct({ ...formAct, note: e.target.value })} />
               </div>
               <button type="submit" className="btn btn-solid" disabled={savingAct}>
                 {savingAct ? 'Enregistrement...' : `+ Valider l'activité`}
@@ -290,15 +267,7 @@ export default function FicheMembre() {
                 </div>
                 <div className="table-wrap">
                   <table>
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Heure</th>
-                        <th>Prochaine dispo</th>
-                        <th>Somme</th>
-                        <th>Note</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th>Type</th><th>Heure</th><th>Prochaine dispo</th><th>Somme</th><th>Note</th></tr></thead>
                     <tbody>
                       {activites.map(a => (
                         <tr key={a.id}>
@@ -322,56 +291,47 @@ export default function FicheMembre() {
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr>
-                    <th>Drogue</th>
-                    <th>Quantité</th>
-                    <th>Argent sale ($)</th>
-                    <th>Statut</th>
-                  </tr>
+                  <tr><th>Drogue</th><th>Quantité</th><th>Prix vente unitaire ($)</th><th>Bénéfice prévu</th><th>Statut</th></tr>
                 </thead>
                 <tbody>
                   {lignesVente.map(l => {
-                    const drogue = drogues.find(d => d.id === l.drogue_id)
-                    const argentAuto = l.statut === 'Saisie' && drogue
-                      ? `− ${fmt(parseInt(l.quantite || 0) * drogue.prix_revient)}`
-                      : null
-
+                    const drogue   = drogues.find(d => d.id === l.drogue_id)
+                    const qte      = parseInt(l.quantite) || 0
+                    const prixV    = parseFloat(l.prix_unitaire) || 0
+                    const benefice = drogue && l.statut === 'Vendu' && qte && prixV
+                      ? (prixV - drogue.prix_revient) * qte : null
+                    const perteSaisie = drogue && l.statut === 'Saisie' && qte
+                      ? -(qte * drogue.prix_revient) : null
                     return (
                       <tr key={l._id}>
                         <td>
                           <select className="form-select" style={{ minWidth: 140 }}
-                            value={l.drogue_id}
-                            onChange={e => updateLigne(l._id, 'drogue_id', e.target.value)}
-                          >
+                            value={l.drogue_id} onChange={e => updateLigne(l._id, 'drogue_id', e.target.value)}>
                             <option value="">— Choisir —</option>
-                            {drogues.map(d => (
-                              <option key={d.id} value={d.id}>{d.nom}</option>
-                            ))}
+                            {drogues.map(d => <option key={d.id} value={d.id}>{d.nom} (rev. {fmt(d.prix_revient)})</option>)}
                           </select>
                         </td>
                         <td>
-                          <input className="form-input" type="number" min="1" style={{ width: 90 }}
-                            placeholder="Qté"
-                            value={l.quantite}
-                            onChange={e => updateLigne(l._id, 'quantite', e.target.value)}
-                          />
+                          <input className="form-input" type="number" min="1" style={{ width: 80 }}
+                            placeholder="Qté" value={l.quantite}
+                            onChange={e => updateLigne(l._id, 'quantite', e.target.value)} />
                         </td>
                         <td>
                           {l.statut === 'Saisie' ? (
-                            <span style={{ color: '#e05555', fontSize: 13 }}>{argentAuto || '— saisie'}</span>
+                            <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>— saisie</span>
                           ) : (
-                            <input className="form-input" type="number" min="0" style={{ width: 120 }}
-                              placeholder="Montant"
-                              value={l.argent_sale}
-                              onChange={e => updateLigne(l._id, 'argent_sale', e.target.value)}
-                            />
+                            <input className="form-input" type="number" min="0" style={{ width: 110 }}
+                              placeholder="Prix/unité" value={l.prix_unitaire}
+                              onChange={e => updateLigne(l._id, 'prix_unitaire', e.target.value)} />
                           )}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>
+                          {benefice !== null && <span style={{ color: benefice >= 0 ? 'var(--or-pale)' : '#e05555' }}>{fmt(benefice)}</span>}
+                          {perteSaisie !== null && <span style={{ color: '#e05555' }}>− {fmt(Math.abs(perteSaisie))}</span>}
                         </td>
                         <td>
                           <select className="form-select" style={{ minWidth: 110 }}
-                            value={l.statut}
-                            onChange={e => updateLigne(l._id, 'statut', e.target.value)}
-                          >
+                            value={l.statut} onChange={e => updateLigne(l._id, 'statut', e.target.value)}>
                             <option value="Vendu">Vendu</option>
                             <option value="Saisie">Saisie</option>
                           </select>
@@ -393,30 +353,16 @@ export default function FicheMembre() {
                 </div>
                 <div className="table-wrap">
                   <table>
-                    <thead>
-                      <tr>
-                        <th>Drogue</th>
-                        <th>Qté</th>
-                        <th>Argent sale</th>
-                        <th>Statut</th>
-                        <th>Date</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th>Drogue</th><th>Qté</th><th>Bénéfice</th><th>Statut</th><th>Date</th></tr></thead>
                     <tbody>
                       {ventes.map(v => (
                         <tr key={v.id}>
                           <td>{v.drogues?.nom || '—'}</td>
                           <td>{v.quantite}</td>
                           <td style={{ color: v.statut === 'Saisie' ? '#e05555' : 'var(--or-pale)' }}>
-                            {v.statut === 'Saisie'
-                              ? `− ${fmt(Math.abs(v.argent_sale))}`
-                              : fmt(v.argent_sale)}
+                            {v.statut === 'Saisie' ? `− ${fmt(Math.abs(v.argent_sale))}` : fmt(v.argent_sale)}
                           </td>
-                          <td>
-                            <span className={`badge ${v.statut === 'Saisie' ? 'badge-rouge' : 'badge-vert'}`}>
-                              {v.statut}
-                            </span>
-                          </td>
+                          <td><span className={`badge ${v.statut === 'Saisie' ? 'badge-rouge' : 'badge-vert'}`}>{v.statut}</span></td>
                           <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(v.created_at)}</td>
                         </tr>
                       ))}
@@ -427,20 +373,13 @@ export default function FicheMembre() {
             )}
           </div>
 
-          {/* Récap semaine détaillé */}
+          {/* Récap */}
           <div className="card">
             <div className="card-title">Récap semaine — {membre.surnom}</div>
             <div className="table-wrap">
               <table>
                 <thead>
-                  <tr>
-                    <th>Activités</th>
-                    <th>Ventes</th>
-                    <th>Pertes (saisies)</th>
-                    <th>Total brut</th>
-                    <th>Commission ({COMMISSION_PCT}%)</th>
-                    <th>Total NET</th>
-                  </tr>
+                  <tr><th>Activités</th><th>Ventes (bénéf.)</th><th>Pertes (saisies)</th><th>Total brut</th><th>Commission ({commissionPct}%)</th><th>Total NET</th></tr>
                 </thead>
                 <tbody>
                   <tr>
@@ -449,9 +388,7 @@ export default function FicheMembre() {
                     <td style={{ color: '#e05555' }}>− {fmt(totalSaisies)}</td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(brut)}</td>
                     <td style={{ color: '#e8a84c' }}>− {fmt(commission)}</td>
-                    <td style={{ color: 'var(--or)', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-corps)' }}>
-                      {fmt(net)}
-                    </td>
+                    <td style={{ color: 'var(--or)', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-corps)' }}>{fmt(net)}</td>
                   </tr>
                 </tbody>
               </table>

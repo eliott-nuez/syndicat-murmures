@@ -13,6 +13,7 @@ import Blanchiment    from './pages/Blanchiment'
 import Administration from './pages/Administration'
 import FicheMembre    from './pages/FicheMembre'
 import Drogues        from './pages/Drogues'
+import Calendrier     from './pages/Calendrier'
 import Layout         from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -33,8 +34,9 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
 
         {/* Tous membres connectés */}
-        <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-        <Route path="/fiche"     element={<AppLayout><FichePerso /></AppLayout>} />
+        <Route path="/dashboard"   element={<AppLayout><Dashboard /></AppLayout>} />
+        <Route path="/fiche"       element={<AppLayout><FichePerso /></AppLayout>} />
+        <Route path="/calendrier"  element={<AppLayout><Calendrier /></AppLayout>} />
 
         {/* Responsable + Direction */}
         <Route path="/recap-global" element={

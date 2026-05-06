@@ -2,8 +2,9 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 const NAV_TOUS = [
-  { to: '/dashboard',   label: 'Dashboard',     icon: '◈' },
-  { to: '/fiche',       label: 'Ma fiche perso', icon: '◉' },
+  { to: '/dashboard',   label: 'Dashboard',      icon: '◈' },
+  { to: '/fiche',       label: 'Ma fiche perso',  icon: '◉' },
+  { to: '/calendrier',  label: 'Calendrier',      icon: '◻' },
 ]
 const NAV_RESPONSABLE = [
   { to: '/recap-global', label: 'Récap global',  icon: '◎' },

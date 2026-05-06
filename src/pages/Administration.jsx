@@ -4,8 +4,11 @@ import { supabase } from '../supabaseClient'
 const RANGS = ['membre', 'responsable', 'direction']
 
 export default function Administration() {
-  const [membres, setMembres] = useState([])
-  const [showForm, setShowForm] = useState(false)
+  const [membres, setMembres]       = useState([])
+  const [showForm, setShowForm]     = useState(false)
+  const [commissions, setCommissions] = useState({ membre: 10, responsable: 8, direction: 5 })
+  const [savingComm, setSavingComm] = useState(false)
+  const [msgComm, setMsgComm]       = useState({ type: '', text: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [msg, setMsg]         = useState({ type: '', text: '' })
@@ -19,7 +22,32 @@ export default function Administration() {
   const [editMdp, setEditMdp]     = useState({})
   const [newMdp, setNewMdp]       = useState({})
 
-  useEffect(() => { fetchMembres() }, [])
+  useEffect(() => {
+    fetchMembres()
+    fetchCommissions()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchCommissions = async () => {
+    const { data } = await supabase.from('parametres').select('*')
+    if (!data) return
+    const map = {}
+    data.forEach(p => { if (p.cle.startsWith('commission_')) map[p.cle.replace('commission_', '')] = Number(p.valeur) })
+    setCommissions(prev => ({ ...prev, ...map }))
+  }
+
+  const saveCommissions = async () => {
+    setSavingComm(true)
+    setMsgComm({ type: '', text: '' })
+    const upserts = Object.entries(commissions).map(([rang, val]) => ({
+      cle: `commission_${rang}`, valeur: Number(val),
+    }))
+    const { error } = await supabase.from('parametres').upsert(upserts, { onConflict: 'cle' })
+    setSavingComm(false)
+    setMsgComm(error
+      ? { type: 'error', text: error.message }
+      : { type: 'success', text: 'Taux mis à jour.' }
+    )
+  }
 
   const fetchMembres = async () => {
     setLoading(true)
@@ -95,6 +123,25 @@ export default function Administration() {
       </div>
 
       {msg.text && <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`}>{msg.text}</div>}
+
+      {/* ── Taux de commission ── */}
+      <div className="card">
+        <div className="card-title">Taux de commission par rang</div>
+        {msgComm.text && <div className={`alert alert-${msgComm.type === 'error' ? 'error' : 'success'}`} style={{ marginBottom: 14 }}>{msgComm.text}</div>}
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+          {['membre', 'responsable', 'direction'].map(rang => (
+            <div key={rang} className="form-group" style={{ minWidth: 160 }}>
+              <label className="form-label" style={{ textTransform: 'capitalize' }}>{rang} (%)</label>
+              <input className="form-input" type="number" min="0" max="100" step="0.5"
+                value={commissions[rang] ?? ''}
+                onChange={e => setCommissions(prev => ({ ...prev, [rang]: e.target.value }))} />
+            </div>
+          ))}
+        </div>
+        <button className="btn btn-solid" disabled={savingComm} onClick={saveCommissions}>
+          {savingComm ? 'Sauvegarde...' : 'Sauvegarder les taux'}
+        </button>
+      </div>
 
       {/* ── Formulaire création ── */}
       {showForm && (

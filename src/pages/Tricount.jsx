@@ -40,28 +40,28 @@ export default function Tricount() {
     setLoading(false)
   }
 
-  // ── Calcul des balances client-side ──
+  // ── Calcul des balances : équilibre global (total / nb membres) ──
   const computeBalances = () => {
     const bal = {}
     membres.forEach(m => { bal[m.id] = 0 })
 
+    const totalDepenses = depenses
+      .filter(d => d.categorie !== 'Remboursement')
+      .reduce((s, d) => s + (d.montant_total || 0), 0)
+    const fairShare = membres.length > 0 ? totalDepenses / membres.length : 0
+
     depenses.forEach(dep => {
       if (dep.categorie === 'Remboursement') {
-        // A (payeur) rembourse B (participant) → A's solde monte, B's solde descend
         dep.depense_participants?.forEach(p => {
           bal[dep.payeur_id] = (bal[dep.payeur_id] || 0) + p.part_due
           bal[p.membre_id]   = (bal[p.membre_id]   || 0) - p.part_due
         })
       } else {
-        // Dépense normale
         bal[dep.payeur_id] = (bal[dep.payeur_id] || 0) + dep.montant_total
-        dep.depense_participants?.forEach(p => {
-          if (!p.rembourse) {
-            bal[p.membre_id] = (bal[p.membre_id] || 0) - p.part_due
-          }
-        })
       }
     })
+
+    membres.forEach(m => { bal[m.id] = (bal[m.id] || 0) - fairShare })
     return bal
   }
 
@@ -202,8 +202,10 @@ export default function Tricount() {
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
-  const balances     = computeBalances()
-  const transactions = computeTransactions(structuredClone ? structuredClone(balances) : JSON.parse(JSON.stringify(balances)))
+  const balances       = computeBalances()
+  const transactions   = computeTransactions(JSON.parse(JSON.stringify(balances)))
+  const totalDepenses  = depenses.filter(d => d.categorie !== 'Remboursement').reduce((s, d) => s + (d.montant_total || 0), 0)
+  const fairShare      = membres.length > 0 ? totalDepenses / membres.length : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -228,6 +230,22 @@ export default function Tricount() {
       </div>
 
       {msg && <div className="alert alert-success">{msg}</div>}
+
+      {/* ── Résumé global ── */}
+      <div className="grid-3">
+        <div className="stat-box">
+          <span className="stat-label">Total dépenses</span>
+          <span className="stat-value">{fmt(totalDepenses)}</span>
+        </div>
+        <div className="stat-box">
+          <span className="stat-label">Membres direction</span>
+          <span className="stat-value">{membres.length}</span>
+        </div>
+        <div className="stat-box">
+          <span className="stat-label">Part équitable / membre</span>
+          <span className="stat-value" style={{ color: 'var(--or)' }}>{fmt(fairShare)}</span>
+        </div>
+      </div>
 
       {/* ── Soldes par membre ── */}
       <div className="card">
@@ -379,42 +397,8 @@ export default function Tricount() {
                 onChange={e => setForm({ ...form, description: e.target.value })} />
             </div>
 
-            {/* Participants */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <label className="form-label" style={{ marginBottom: 0 }}>Participants (qui doit rembourser ?)</label>
-                {form.participants.length > 0 && form.montant_total && (
-                  <button type="button" className="btn btn-or btn-sm" onClick={repartirEquitablement}>
-                    Répartir équitablement
-                  </button>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                {membres.map(m => {
-                  const selected = form.participants.find(p => p.membre_id === m.id)
-                  return (
-                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button type="button"
-                        onClick={() => toggleParticipant(m.id)}
-                        style={{
-                          padding: '6px 14px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
-                          border: selected ? '1px solid var(--or)' : '1px solid var(--or-border)',
-                          background: selected ? 'var(--or-glow)' : 'transparent',
-                          color: selected ? 'var(--or-pale)' : 'var(--texte-soft)',
-                          transition: 'var(--transition)', fontFamily: 'var(--font-ui)',
-                        }}>
-                        {m.surnom}
-                      </button>
-                      {selected && (
-                        <input type="number" min="0" step="0.01" className="form-input"
-                          style={{ width: 100 }} placeholder="Part $"
-                          value={selected.part_due}
-                          onChange={e => updatePart(m.id, e.target.value)} />
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+            <div style={{ padding: '10px 14px', background: 'var(--or-glow)', border: '1px solid var(--or-border)', borderRadius: 6, fontSize: 12, color: 'var(--texte-soft)', marginBottom: 16 }}>
+              Les dépenses sont réparties équitablement entre tous les membres de la direction.
             </div>
 
             <button type="submit" className="btn btn-solid" disabled={saving}>

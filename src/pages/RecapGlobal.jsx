@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-const COMMISSION_PCT = 10 // ⚠️ À adapter si besoin
-
 export default function RecapGlobal() {
-  const [recaps, setRecaps]     = useState([])
-  const [sortKey, setSortKey]   = useState('net')
-  const [sortDir, setSortDir]   = useState('desc')
-  const [loading, setLoading]   = useState(true)
+  const [recaps, setRecaps]         = useState([])
+  const [commissions, setCommissions] = useState({})
+  const [sortKey, setSortKey]       = useState('net')
+  const [sortDir, setSortDir]       = useState('desc')
+  const [loading, setLoading]       = useState(true)
 
   const getDebutSemaine = () => {
     const d = new Date()
@@ -24,6 +23,13 @@ export default function RecapGlobal() {
   const fetchAll = async () => {
     setLoading(true)
     const debut = getDebutSemaine()
+
+    const { data: paramsData } = await supabase.from('parametres').select('*')
+    const commMap = {}
+    ;(paramsData || []).forEach(p => {
+      if (p.cle.startsWith('commission_')) commMap[p.cle.replace('commission_', '')] = Number(p.valeur)
+    })
+    setCommissions(commMap)
 
     const { data: membresData } = await supabase
       .from('membres')
@@ -47,10 +53,11 @@ export default function RecapGlobal() {
       const totalAct    = acts.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
       const totalVentes = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
       const brut        = totalAct + totalVentes
-      const commission  = totalVentes * COMMISSION_PCT / 100
+      const commPct     = commMap[m.rang] ?? 10
+      const commission  = totalVentes * commPct / 100
       const net         = brut - commission
 
-      return { ...m, totalAct, totalVentes, brut, commission, net, nbActivites: acts.length }
+      return { ...m, totalAct, totalVentes, brut, commission, net, commPct, nbActivites: acts.length }
     })
 
     setRecaps(result)
@@ -151,7 +158,7 @@ export default function RecapGlobal() {
                   <td>{fmt(r.totalAct)}</td>
                   <td>{fmt(r.totalVentes)}</td>
                   <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.brut)}</td>
-                  <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)}</td>
+                  <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)} <span style={{ fontSize: 10, opacity: 0.7 }}>({r.commPct}%)</span></td>
                   <td style={{ color: 'var(--or)', fontWeight: 600, fontFamily: 'var(--font-corps)', fontSize: 15 }}>
                     {fmt(r.net)}
                   </td>
