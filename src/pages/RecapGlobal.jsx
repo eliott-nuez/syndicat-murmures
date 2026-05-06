@@ -4,7 +4,6 @@ import { supabase } from '../supabaseClient'
 const COMMISSION_PCT = 10 // ⚠️ À adapter si besoin
 
 export default function RecapGlobal() {
-  const [membres, setMembres]   = useState([])
   const [recaps, setRecaps]     = useState([])
   const [sortKey, setSortKey]   = useState('net')
   const [sortDir, setSortDir]   = useState('desc')
@@ -20,7 +19,7 @@ export default function RecapGlobal() {
 
   useEffect(() => {
     fetchAll()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAll = async () => {
     setLoading(true)

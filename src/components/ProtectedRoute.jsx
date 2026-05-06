@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { supabase } from '../supabaseClient'
 
 // roles: tableau de rangs autorisés, ex: ['direction'] ou ['direction','responsable']
 export default function ProtectedRoute({ children, roles = [] }) {

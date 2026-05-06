@@ -40,7 +40,7 @@ export default function FichePerso() {
     fetchDrogues()
     fetchActivitesSemaine()
     fetchVentesSemaine()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchDrogues = async () => {
     const { data } = await supabase.from('drogues').select('*').order('nom')

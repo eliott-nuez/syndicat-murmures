@@ -6,7 +6,6 @@ const RANGS = ['membre', 'responsable', 'direction']
 export default function Administration() {
   const [membres, setMembres] = useState([])
   const [showForm, setShowForm] = useState(false)
-  const [editId, setEditId]   = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [msg, setMsg]         = useState({ type: '', text: '' })

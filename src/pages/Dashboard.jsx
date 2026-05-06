@@ -40,7 +40,7 @@ export default function Dashboard() {
   const [connectes, setConnectes]   = useState('—')
   const [loading, setLoading]       = useState(true)
   // now sert à forcer le re-render toutes les minutes pour rafraichir les timers
-  const [now, setNow]               = useState(new Date())
+  const [, setNow]                  = useState(new Date())
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60000)
@@ -49,7 +49,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     setLoading(true)

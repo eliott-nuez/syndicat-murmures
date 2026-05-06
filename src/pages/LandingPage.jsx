@@ -33,7 +33,7 @@ export default function LandingPage() {
         </div>
         <div style={{ display: 'flex', gap: 40 }}>
           {['Accueil', 'Services', 'À propos', 'Contact'].map(l => (
-            <a key={l} href="#" style={{
+            <a key={l} href="/" style={{
               fontSize: 13,
               color: 'rgba(255,255,255,0.55)',
               letterSpacing: '0.04em',

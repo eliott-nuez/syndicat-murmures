@@ -9,7 +9,7 @@ export default function Blanchiment() {
   const [loading, setLoading]             = useState(true)
   const [saving, setSaving]               = useState(false)
   const [msg, setMsg]                     = useState({ type: '', text: '' })
-  const [now, setNow]                     = useState(new Date())
+  const [, setNow]                         = useState(new Date())
 
   const [formOp, setFormOp] = useState({
     blanchisseur_id:   '',

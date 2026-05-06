@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
@@ -22,7 +21,6 @@ export default function Layout({ children }) {
   const navigate   = useNavigate()
   const membre     = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const rang       = membre.rang || 'membre'
-  const [open, setOpen] = useState(false)
 
   const handleLogout = async () => {
     const stored = localStorage.getItem('sdm_membre')

@@ -57,7 +57,7 @@ export default function FicheMembre() {
     setMsg({ type: '', text: '' })
     setFormAct({ type_code: 'ATM', somme_argent_sale: '', note: '', heure_faite: new Date().toISOString().slice(0, 16) })
     setLignesVente([emptyLigne()])
-  }, [membreId])
+  }, [membreId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchActivites = async () => {
     const { data } = await supabase
