@@ -5,15 +5,15 @@ import { supabase } from '../supabaseClient'
 // Modifier ici si les cooldowns changent
 const COOLDOWNS = {
   'ATM':         3,
-  'Superette':   2,
+  'Supérette':   2,
   'Go Fast':    24,
   'Cambriolage': 3,
 }
 
-// Labels affichés (séparés des clés pour éviter les pb d'encodage)
+// Labels affichés
 const LABELS = {
   'ATM':         'ATM',
-  'Superette':   'Supérette',
+  'Supérette':   'Supérette',
   'Go Fast':     'Go Fast',
   'Cambriolage': 'Cambriolage',
 }
