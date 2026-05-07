@@ -8,8 +8,9 @@ const NAV_TOUS = [
   { to: '/calendrier',  label: 'Calendrier',      icon: '◻' },
 ]
 const NAV_RESPONSABLE = [
-  { to: '/recap-global', label: 'Récap global',  icon: '◎' },
-  { to: '/stock',        label: 'Stock',          icon: '◇' },
+  { to: '/recap-global',   label: 'Récap global',    icon: '◎' },
+  { to: '/stock',          label: 'Stock',            icon: '◇' },
+  { to: '/ventes-groupe',  label: 'Ventes groupe',   icon: '◆' },
 ]
 const NAV_DIRECTION = [
   { to: '/fiche-membre',  label: 'Fiche membre',   icon: '◉' },
