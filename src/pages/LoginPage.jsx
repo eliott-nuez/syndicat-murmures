@@ -30,7 +30,7 @@ export default function LoginPage() {
     const { data, error: err } = await supabase
       .from('membres')
       .select('*')
-      .eq('surnom', surnom.trim())
+      .ilike('surnom', surnom.trim())
       .single()
 
     setLoading(false)
