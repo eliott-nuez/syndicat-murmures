@@ -41,21 +41,22 @@ export default function RecapGlobal() {
 
     const { data: ventesData } = await supabase
       .from('ventes_drogue')
-      .select('membre_id, argent_sale, statut, quantite, drogue_id')
+      .select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id')
       .gte('created_at', debut.toISOString())
 
     const result = (membresData || []).map(m => {
       const acts   = (activitesData || []).filter(a => a.membre_id === m.id)
       const ventes = (ventesData    || []).filter(v => v.membre_id === m.id)
 
-      const totalAct    = acts.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-      const totalVentes = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
-      const brut        = totalAct + totalVentes
-      const commPct     = commMap[m.rang] ?? 10
-      const commission  = totalVentes * commPct / 100
-      const net         = brut - commission
+      const totalAct       = acts.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
+      const totalPrixTotal = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.prix_total || 0), 0)
+      const totalBenefice  = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
+      const brut           = totalAct + totalBenefice
+      const commPct        = commMap[m.rang] ?? 10
+      const commission     = totalBenefice * commPct / 100
+      const net            = brut - commission
 
-      return { ...m, totalAct, totalVentes, brut, commission, net, commPct, nbActivites: acts.length }
+      return { ...m, totalAct, totalPrixTotal, totalBenefice, brut, commission, net, commPct, nbActivites: acts.length }
     })
 
     setRecaps(result)
@@ -85,12 +86,13 @@ export default function RecapGlobal() {
   )
 
   const totaux = recaps.reduce((acc, r) => ({
-    totalAct:    acc.totalAct    + r.totalAct,
-    totalVentes: acc.totalVentes + r.totalVentes,
-    brut:        acc.brut        + r.brut,
-    commission:  acc.commission  + r.commission,
-    net:         acc.net         + r.net,
-  }), { totalAct: 0, totalVentes: 0, brut: 0, commission: 0, net: 0 })
+    totalAct:       acc.totalAct       + r.totalAct,
+    totalPrixTotal: acc.totalPrixTotal + r.totalPrixTotal,
+    totalBenefice:  acc.totalBenefice  + r.totalBenefice,
+    brut:           acc.brut           + r.brut,
+    commission:     acc.commission     + r.commission,
+    net:            acc.net            + r.net,
+  }), { totalAct: 0, totalPrixTotal: 0, totalBenefice: 0, brut: 0, commission: 0, net: 0 })
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
@@ -132,14 +134,15 @@ export default function RecapGlobal() {
           <table>
             <thead>
               <tr>
-                <SortTh label="Joueur"      k="surnom" />
-                <SortTh label="Rang"        k="rang" />
-                <SortTh label="Nb activités" k="nbActivites" />
-                <SortTh label="Activités $"  k="totalAct" />
-                <SortTh label="Ventes $"     k="totalVentes" />
-                <SortTh label="Total brut"   k="brut" />
-                <SortTh label="Commission"   k="commission" />
-                <SortTh label="Total NET"    k="net" />
+                <SortTh label="Joueur"           k="surnom" />
+                <SortTh label="Rang"             k="rang" />
+                <SortTh label="Nb activités"     k="nbActivites" />
+                <SortTh label="Activités $"      k="totalAct" />
+                <SortTh label="Ventes (total)"   k="totalPrixTotal" />
+                <SortTh label="Ventes (bénéf.)"  k="totalBenefice" />
+                <SortTh label="Total brut"       k="brut" />
+                <SortTh label="Commission"       k="commission" />
+                <SortTh label="Total NET"        k="net" />
               </tr>
             </thead>
             <tbody>
@@ -154,7 +157,8 @@ export default function RecapGlobal() {
                   </td>
                   <td style={{ textAlign: 'center' }}>{r.nbActivites}</td>
                   <td>{fmt(r.totalAct)}</td>
-                  <td>{fmt(r.totalVentes)}</td>
+                  <td style={{ color: 'var(--texte-soft)' }}>{fmt(r.totalPrixTotal)}</td>
+                  <td>{fmt(r.totalBenefice)}</td>
                   <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.brut)}</td>
                   <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)} <span style={{ fontSize: 10, opacity: 0.7 }}>({r.commPct}%)</span></td>
                   <td style={{ color: 'var(--or)', fontWeight: 600, fontFamily: 'var(--font-corps)', fontSize: 15 }}>
@@ -170,7 +174,8 @@ export default function RecapGlobal() {
                   Totaux
                 </td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalAct)}</td>
-                <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalVentes)}</td>
+                <td style={{ color: 'var(--texte-soft)', fontWeight: 600 }}>{fmt(totaux.totalPrixTotal)}</td>
+                <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalBenefice)}</td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.brut)}</td>
                 <td style={{ color: '#e8a84c', fontWeight: 600 }}>− {fmt(totaux.commission)}</td>
                 <td style={{ color: 'var(--or)', fontWeight: 700, fontFamily: 'var(--font-corps)', fontSize: 16 }}>

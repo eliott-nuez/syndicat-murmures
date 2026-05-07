@@ -135,16 +135,19 @@ export default function FichePerso() {
     if (!lignesValides.length) return
 
     const rows = lignesValides.map(l => {
-      const drogue = drogues.find(d => d.id === l.drogue_id)
-      const qte    = parseInt(l.quantite) || 0
-      let argent   = 0
+      const drogue    = drogues.find(d => d.id === l.drogue_id)
+      const qte       = parseInt(l.quantite) || 0
+      let argent      = 0
+      let prix_total  = 0
       if (l.statut === 'Saisie') {
-        argent = -(qte * (drogue?.prix_revient || 0))
+        argent     = -(qte * (drogue?.prix_revient || 0))
+        prix_total = 0
       } else {
         const prixVente = parseFloat(l.prix_unitaire) || 0
-        argent = (prixVente - (drogue?.prix_revient || 0)) * qte
+        prix_total  = prixVente * qte
+        argent      = prix_total - (qte * (drogue?.prix_revient || 0))  // bénéfice
       }
-      return { membre_id: membre.id, drogue_id: l.drogue_id, quantite: qte, argent_sale: argent, statut: l.statut }
+      return { membre_id: membre.id, drogue_id: l.drogue_id, quantite: qte, prix_total, argent_sale: argent, statut: l.statut }
     })
 
     const { error } = await supabase.from('ventes_drogue').insert(rows)
@@ -192,12 +195,13 @@ export default function FichePerso() {
     })
   }
 
-  const totalAct    = activites.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-  const totalVentes = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
-  const totalSaisies = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
-  const brut        = totalAct + totalVentes
-  const commission  = totalVentes * commissionPct / 100
-  const net         = brut - commission
+  const totalAct       = activites.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
+  const totalPrixTotal = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.prix_total || 0), 0)
+  const totalBenefice  = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
+  const totalSaisies   = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
+  const brut           = totalAct + totalBenefice
+  const commission     = totalBenefice * commissionPct / 100
+  const net            = brut - commission
 
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -304,6 +308,7 @@ export default function FichePerso() {
                 <th>Drogue</th>
                 <th>Quantité</th>
                 <th>Prix vente unitaire ($)</th>
+                <th>Montant total</th>
                 <th>Bénéfice prévu</th>
                 <th>Statut</th>
               </tr>
@@ -313,8 +318,11 @@ export default function FichePerso() {
                 const drogue = drogues.find(d => d.id === l.drogue_id)
                 const qte    = parseInt(l.quantite) || 0
                 const prixV  = parseFloat(l.prix_unitaire) || 0
+                const montantTotal = drogue && l.statut === 'Vendu' && qte && prixV
+                  ? prixV * qte
+                  : null
                 const benefice = drogue && l.statut === 'Vendu' && qte && prixV
-                  ? (prixV - drogue.prix_revient) * qte
+                  ? prixV * qte - drogue.prix_revient * qte
                   : null
                 const perteSaisie = drogue && l.statut === 'Saisie' && qte
                   ? -(qte * drogue.prix_revient)
@@ -347,6 +355,9 @@ export default function FichePerso() {
                           value={l.prix_unitaire}
                           onChange={e => updateLigne(l._id, 'prix_unitaire', e.target.value)} />
                       )}
+                    </td>
+                    <td style={{ color: 'var(--texte-soft)', fontWeight: 500 }}>
+                      {montantTotal !== null ? fmt(montantTotal) : '—'}
                     </td>
                     <td style={{ fontWeight: 600 }}>
                       {benefice !== null && (
@@ -383,12 +394,15 @@ export default function FichePerso() {
             </div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Drogue</th><th>Qté</th><th>Bénéfice</th><th>Statut</th><th>Date</th></tr></thead>
+                <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Bénéfice</th><th>Statut</th><th>Date</th></tr></thead>
                 <tbody>
                   {ventes.map(v => (
                     <tr key={v.id}>
                       <td>{v.drogues?.nom || '—'}</td>
                       <td>{v.quantite}</td>
+                      <td style={{ color: 'var(--texte-soft)' }}>
+                        {v.statut === 'Saisie' ? '—' : fmt(v.prix_total || 0)}
+                      </td>
                       <td style={{ color: v.statut === 'Saisie' ? '#e05555' : 'var(--or-pale)' }}>
                         {v.statut === 'Saisie' ? `− ${fmt(Math.abs(v.argent_sale))}` : fmt(v.argent_sale)}
                       </td>
@@ -415,17 +429,19 @@ export default function FichePerso() {
             <thead>
               <tr>
                 <th>Activités</th>
-                <th>Ventes (bénéf.)</th>
+                <th>Ventes (montant total)</th>
+                <th>Ventes (bénéfice)</th>
                 <th>Pertes (saisies)</th>
                 <th>Total brut</th>
-                <th>Commission ({commissionPct}%)</th>
+                <th>Commission {commissionPct}% <span style={{ fontWeight: 400, opacity: 0.7 }}>(sur bénéf.)</span></th>
                 <th>Total NET</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td style={{ color: 'var(--or-pale)' }}>{fmt(totalAct)}</td>
-                <td style={{ color: 'var(--or-pale)' }}>{fmt(totalVentes)}</td>
+                <td style={{ color: 'var(--texte-soft)' }}>{fmt(totalPrixTotal)}</td>
+                <td style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</td>
                 <td style={{ color: '#e05555' }}>− {fmt(totalSaisies)}</td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(brut)}</td>
                 <td style={{ color: '#e8a84c' }}>− {fmt(commission)}</td>
