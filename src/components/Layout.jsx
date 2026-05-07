@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { useInactivityLogout } from '../hooks/useInactivityLogout'
 
 const NAV_TOUS = [
   { to: '/dashboard',   label: 'Dashboard',      icon: '◈' },
@@ -21,6 +22,7 @@ const NAV_DIRECTION = [
 export default function Layout({ children }) {
   const navigate   = useNavigate()
   const membre     = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  useInactivityLogout()
   const rang       = membre.rang || 'membre'
 
   const handleLogout = async () => {
