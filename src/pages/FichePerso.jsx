@@ -40,7 +40,7 @@ export default function FichePerso() {
   const [savingMdp, setSavingMdp] = useState(false)
 
   function emptyLigne() {
-    return { drogue_id: '', quantite: '', prix_unitaire: '', statut: 'Vendu', _id: Math.random() }
+    return { drogue_id: '', quantite: '', prix_total: '', statut: 'Vendu', _id: Math.random() }
   }
 
   useEffect(() => {
@@ -135,17 +135,16 @@ export default function FichePerso() {
     if (!lignesValides.length) return
 
     const rows = lignesValides.map(l => {
-      const drogue    = drogues.find(d => d.id === l.drogue_id)
-      const qte       = parseInt(l.quantite) || 0
-      let argent      = 0
-      let prix_total  = 0
+      const drogue   = drogues.find(d => d.id === l.drogue_id)
+      const qte      = parseInt(l.quantite) || 0
+      let prix_total = 0
+      let argent     = 0
       if (l.statut === 'Saisie') {
-        argent     = -(qte * (drogue?.prix_revient || 0))
         prix_total = 0
+        argent     = -(qte * (drogue?.prix_revient || 0))
       } else {
-        const prixVente = parseFloat(l.prix_unitaire) || 0
-        prix_total  = prixVente * qte
-        argent      = prix_total - (qte * (drogue?.prix_revient || 0))  // bénéfice
+        prix_total = parseFloat(l.prix_total) || 0
+        argent     = prix_total - (qte * (drogue?.prix_revient || 0))  // bénéfice
       }
       return { membre_id: membre.id, drogue_id: l.drogue_id, quantite: qte, prix_total, argent_sale: argent, statut: l.statut }
     })
@@ -307,22 +306,20 @@ export default function FichePerso() {
               <tr>
                 <th>Drogue</th>
                 <th>Quantité</th>
-                <th>Prix vente unitaire ($)</th>
-                <th>Montant total</th>
+                <th>Montant total ($)</th>
+                <th>Prix/unité</th>
                 <th>Bénéfice prévu</th>
                 <th>Statut</th>
               </tr>
             </thead>
             <tbody>
               {lignesVente.map(l => {
-                const drogue = drogues.find(d => d.id === l.drogue_id)
-                const qte    = parseInt(l.quantite) || 0
-                const prixV  = parseFloat(l.prix_unitaire) || 0
-                const montantTotal = drogue && l.statut === 'Vendu' && qte && prixV
-                  ? prixV * qte
-                  : null
-                const benefice = drogue && l.statut === 'Vendu' && qte && prixV
-                  ? prixV * qte - drogue.prix_revient * qte
+                const drogue     = drogues.find(d => d.id === l.drogue_id)
+                const qte        = parseInt(l.quantite) || 0
+                const total      = parseFloat(l.prix_total) || 0
+                const prixUnit   = qte > 0 && total > 0 ? Math.round(total / qte) : null
+                const benefice   = drogue && l.statut === 'Vendu' && qte && total
+                  ? total - drogue.prix_revient * qte
                   : null
                 const perteSaisie = drogue && l.statut === 'Saisie' && qte
                   ? -(qte * drogue.prix_revient)
@@ -350,14 +347,14 @@ export default function FichePerso() {
                       {l.statut === 'Saisie' ? (
                         <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>— saisie</span>
                       ) : (
-                        <input className="form-input" type="number" min="0" style={{ width: 110 }}
-                          placeholder="Prix/unité"
-                          value={l.prix_unitaire}
-                          onChange={e => updateLigne(l._id, 'prix_unitaire', e.target.value)} />
+                        <input className="form-input" type="number" min="0" style={{ width: 120 }}
+                          placeholder="Ex : 15000"
+                          value={l.prix_total}
+                          onChange={e => updateLigne(l._id, 'prix_total', e.target.value)} />
                       )}
                     </td>
-                    <td style={{ color: 'var(--texte-soft)', fontWeight: 500 }}>
-                      {montantTotal !== null ? fmt(montantTotal) : '—'}
+                    <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                      {prixUnit !== null ? fmt(prixUnit) : '—'}
                     </td>
                     <td style={{ fontWeight: 600 }}>
                       {benefice !== null && (
