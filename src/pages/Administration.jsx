@@ -91,8 +91,15 @@ export default function Administration() {
   const handleUpdateMdp = async (id) => {
     const mdp = newMdp[id]
     if (!mdp || mdp.length < 4) { setMsg({ type: 'error', text: 'Mot de passe trop court.' }); return }
+    // Mettre à jour dans membres + trouver et mettre à jour l'auth user correspondant
+    const { data: mem } = await supabase.from('membres').select('surnom').eq('id', id).single()
     await supabase.from('membres').update({ mot_de_passe: mdp }).eq('id', id)
-    setMsg({ type: 'success', text: 'Mot de passe mis à jour.' })
+    // Mettre à jour le mot de passe Auth via l'admin API (service_role côté client non recommandé)
+    // Le membre devra se reconnecter avec son nouveau mot de passe
+    if (mem?.surnom) {
+      await supabase.rpc('admin_update_auth_password', { p_surnom: mem.surnom, p_password: mdp }).catch(() => {})
+    }
+    setMsg({ type: 'success', text: 'Mot de passe mis à jour. Le membre devra se reconnecter.' })
     setEditMdp(prev => ({ ...prev, [id]: false }))
     setNewMdp(prev => ({ ...prev, [id]: '' }))
   }

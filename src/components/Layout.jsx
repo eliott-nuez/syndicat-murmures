@@ -29,6 +29,7 @@ export default function Layout({ children }) {
       const m = JSON.parse(stored)
       await supabase.from('membres').update({ actif: false }).eq('id', m.id)
     }
+    await supabase.auth.signOut()
     localStorage.removeItem('sdm_membre')
     navigate('/')
   }

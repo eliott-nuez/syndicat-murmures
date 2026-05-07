@@ -14,16 +14,29 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    // Authentification via Supabase Auth
+    const { error: authErr } = await supabase.auth.signInWithPassword({
+      email: `${surnom.trim().toLowerCase()}@sdm.local`,
+      password: mdp,
+    })
+
+    if (authErr) {
+      setLoading(false)
+      setError('Identifiants incorrects ou compte inactif.')
+      return
+    }
+
+    // Récupérer les données du membre
     const { data, error: err } = await supabase
       .from('membres')
       .select('*')
       .eq('surnom', surnom.trim())
-      .eq('mot_de_passe', mdp)
       .single()
 
     setLoading(false)
 
     if (err || !data) {
+      await supabase.auth.signOut()
       setError('Identifiants incorrects ou compte inactif.')
       return
     }

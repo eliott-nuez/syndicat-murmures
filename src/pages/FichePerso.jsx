@@ -169,7 +169,9 @@ export default function FichePerso() {
       setSavingMdp(false)
       return
     }
+    // Mettre à jour dans la table membres ET dans Supabase Auth
     await supabase.from('membres').update({ mot_de_passe: mdpForm.nouveau }).eq('id', membre.id)
+    await supabase.auth.updateUser({ password: mdpForm.nouveau })
     setSavingMdp(false)
     setMsgMdp({ type: 'success', text: 'Mot de passe mis à jour.' })
     setMdpForm({ actuel: '', nouveau: '', confirm: '' })
