@@ -3,7 +3,6 @@ import { supabase } from '../supabaseClient'
 
 export default function RecapGlobal() {
   const [recaps, setRecaps]         = useState([])
-  const [commissions, setCommissions] = useState({})
   const [sortKey, setSortKey]       = useState('net')
   const [sortDir, setSortDir]       = useState('desc')
   const [loading, setLoading]       = useState(true)
@@ -29,7 +28,6 @@ export default function RecapGlobal() {
     ;(paramsData || []).forEach(p => {
       if (p.cle.startsWith('commission_')) commMap[p.cle.replace('commission_', '')] = Number(p.valeur)
     })
-    setCommissions(commMap)
 
     const { data: membresData } = await supabase
       .from('membres')

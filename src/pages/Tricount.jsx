@@ -92,30 +92,6 @@ export default function Tricount() {
     return transactions
   }
 
-  // ── Participants toggle ──
-  const toggleParticipant = (id) => {
-    setForm(f => {
-      const exists = f.participants.find(p => p.membre_id === id)
-      if (exists) return { ...f, participants: f.participants.filter(p => p.membre_id !== id) }
-      return { ...f, participants: [...f.participants, { membre_id: id, part_due: '' }] }
-    })
-  }
-
-  const updatePart = (id, val) => {
-    setForm(f => ({
-      ...f,
-      participants: f.participants.map(p => p.membre_id === id ? { ...p, part_due: val } : p),
-    }))
-  }
-
-  const repartirEquitablement = () => {
-    const total = parseFloat(form.montant_total) || 0
-    const nb    = form.participants.length
-    if (!nb) return
-    const part  = (total / nb).toFixed(2)
-    setForm(f => ({ ...f, participants: f.participants.map(p => ({ ...p, part_due: part })) }))
-  }
-
   // ── Soumettre dépense ──
   const handleSubmit = async (e) => {
     e.preventDefault()
