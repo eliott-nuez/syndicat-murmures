@@ -1,19 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { getDebutSemaine } from '../utils/temps'
 
 export default function RecapGlobal() {
   const [recaps, setRecaps]         = useState([])
   const [sortKey, setSortKey]       = useState('net')
   const [sortDir, setSortDir]       = useState('desc')
   const [loading, setLoading]       = useState(true)
-
-  const getDebutSemaine = () => {
-    const d = new Date()
-    const jour = d.getDay() || 7
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - jour + 1)
-    return d
-  }
 
   useEffect(() => {
     fetchAll()

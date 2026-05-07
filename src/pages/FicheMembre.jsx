@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { getDebutSemaine } from '../utils/temps'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -37,14 +38,6 @@ export default function FicheMembre() {
 
   function emptyLigne() {
     return { drogue_id: '', quantite: '', prix_total: '', statut: 'Vendu', _id: Math.random() }
-  }
-
-  const getDebutSemaine = () => {
-    const d = new Date()
-    const jour = d.getDay() || 7
-    d.setHours(0, 0, 0, 0)
-    d.setDate(d.getDate() - jour + 1)
-    return d
   }
 
   useEffect(() => {
