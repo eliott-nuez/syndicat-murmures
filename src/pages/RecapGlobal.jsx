@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { getDebutSemaine } from '../utils/temps'
+import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 
 export default function RecapGlobal() {
   const [recaps, setRecaps]         = useState([])
@@ -14,7 +14,8 @@ export default function RecapGlobal() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const debut = getDebutSemaine()
+    const debutStr    = getDebutSemaineStr()
+    const debutUTC    = getDebutSemaine()
 
     const { data: paramsData } = await supabase.from('parametres').select('*')
     const commMap = {}
@@ -30,12 +31,12 @@ export default function RecapGlobal() {
     const { data: activitesData } = await supabase
       .from('activites')
       .select('membre_id, somme_argent_sale')
-      .gte('created_at', debut.toISOString())
+      .gte('heure_faite', debutStr)
 
     const { data: ventesData } = await supabase
       .from('ventes_drogue')
       .select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id')
-      .gte('created_at', debut.toISOString())
+      .gte('created_at', debutUTC.toISOString())
 
     const result = (membresData || []).map(m => {
       const acts   = (activitesData || []).filter(a => a.membre_id === m.id)

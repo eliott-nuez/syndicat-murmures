@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { getDebutSemaine } from '../utils/temps'
+import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 
 // Types d'activites avec leurs cooldowns (en heures)
 // Modifier ici si les cooldowns changent
@@ -88,10 +88,9 @@ export default function Dashboard() {
 
     // Totaux gang semaine (direction uniquement)
     if (isDirection) {
-      const debutSemaine = getDebutSemaine()
       const [{ data: activites }, { data: ventes }] = await Promise.all([
-        supabase.from('activites').select('somme_argent_sale').gte('created_at', debutSemaine.toISOString()),
-        supabase.from('ventes_drogue').select('argent_sale').eq('statut', 'Vendu').gte('created_at', debutSemaine.toISOString()),
+        supabase.from('activites').select('somme_argent_sale').gte('heure_faite', getDebutSemaineStr()),
+        supabase.from('ventes_drogue').select('argent_sale').eq('statut', 'Vendu').gte('created_at', getDebutSemaine().toISOString()),
       ])
       const totalAct    = (activites || []).reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
       const totalVentes = (ventes    || []).reduce((s, v) => s + (v.argent_sale     || 0), 0)
@@ -196,20 +195,18 @@ function RecapSemaineMini({ membreId }) {
 
   useEffect(() => {
     const fetchRecap = async () => {
-      const debut = getDebutSemaine()
-
       const { data: activites } = await supabase
         .from('activites')
         .select('somme_argent_sale')
         .eq('membre_id', membreId)
-        .gte('created_at', debut.toISOString())
+        .gte('heure_faite', getDebutSemaineStr())
 
       const { data: ventes } = await supabase
         .from('ventes_drogue')
         .select('argent_sale, statut')
         .eq('membre_id', membreId)
         .eq('statut', 'Vendu')
-        .gte('created_at', debut.toISOString())
+        .gte('created_at', getDebutSemaine().toISOString())
 
       const totalAct    = (activites || []).reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
       const totalVentes = (ventes    || []).reduce((s, v) => s + (v.argent_sale || 0), 0)

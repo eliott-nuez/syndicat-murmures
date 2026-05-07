@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { getDebutSemaine } from '../utils/temps'
+import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -67,7 +67,7 @@ export default function FichePerso() {
       .from('activites')
       .select('*')
       .eq('membre_id', membre.id)
-      .gte('created_at', getDebutSemaine().toISOString())
+      .gte('heure_faite', getDebutSemaineStr())
       .order('heure_faite', { ascending: false })
     setActivites(data || [])
   }
