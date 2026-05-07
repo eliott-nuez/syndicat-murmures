@@ -88,11 +88,16 @@ export default function FicheMembre() {
     setVentes(data || [])
   }
 
+  const localDateStr = (d) => {
+    const pad = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
   const calcProchainDispo = (heure, type) => {
     const h = COOLDOWNS_H[type] || 0
     const d = new Date(heure)
     d.setHours(d.getHours() + h)
-    return d.toISOString()
+    return localDateStr(d)
   }
 
   const handleSubmitActivite = async (e) => {
@@ -100,8 +105,8 @@ export default function FicheMembre() {
     if (!membreId) return
     setSavingAct(true)
     setMsg({ type: '', text: '' })
-    const heure_faite    = new Date(formAct.heure_faite).toISOString()
-    const prochain_dispo = calcProchainDispo(heure_faite, formAct.type_code)
+    const heure_faite    = formAct.heure_faite  // heure locale directe
+    const prochain_dispo = calcProchainDispo(new Date(heure_faite), formAct.type_code)
     const { error } = await supabase.from('activites').insert({
       membre_id: membreId, type_code: formAct.type_code,
       heure_faite, prochain_dispo,
