@@ -18,10 +18,16 @@ const LABELS = {
   'Cambriolage': 'Cambriolage',
 }
 
+// Normalise les timestamps Supabase "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS" (heure locale)
+function parseTS(str) {
+  if (!str) return null
+  return new Date(typeof str === 'string' ? str.replace(' ', 'T') : str)
+}
+
 // Retourne { dispo: true } ou { dispo: false, label: "2h 34m" }
 function getDispoStatus(prochainDispo) {
   if (!prochainDispo) return { dispo: true, jamaisFait: true }
-  const diff = new Date(prochainDispo) - new Date()
+  const diff = parseTS(prochainDispo) - new Date()
   if (diff <= 0) return { dispo: true }
   const h = Math.floor(diff / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
@@ -109,7 +115,7 @@ export default function Dashboard() {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
   const fmtDate = (d) =>
-    new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
   if (loading) return (
     <div className="loading-screen">

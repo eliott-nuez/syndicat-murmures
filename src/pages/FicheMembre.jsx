@@ -171,8 +171,9 @@ export default function FicheMembre() {
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
+  const parseTS = (d) => new Date(typeof d === 'string' ? d.replace(' ', 'T') : d)
   const fmtDate = (d) =>
-    new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
