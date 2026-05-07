@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
+import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -8,8 +9,6 @@ const COOLDOWNS_H = {
   'Go Fast':    24,
   'Cambriolage': 3,
 }
-
-const COMMISSION_PCT = 10
 
 function localNow() {
   const d = new Date()
@@ -21,11 +20,11 @@ export default function FicheMembre() {
   const [membreId, setMembreId]   = useState('')
   const membre                    = membres.find(m => m.id === membreId) || null
 
-  const [drogues, setDrogues]     = useState([])
-  const [activites, setActivites] = useState([])
-  const [ventes, setVentes]       = useState([])
-  const [commissions, setCommissions] = useState({})
-  const [msg, setMsg]             = useState({ type: '', text: '' })
+  const [drogues, setDrogues]               = useState([])
+  const [activites, setActivites]           = useState([])
+  const [ventes, setVentes]                 = useState([])
+  const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
+  const [msg, setMsg]                       = useState({ type: '', text: '' })
 
   const [formAct, setFormAct] = useState({
     type_code:         'ATM',
@@ -45,14 +44,7 @@ export default function FicheMembre() {
       .then(({ data }) => setMembres(data || []))
     supabase.from('drogues').select('*').order('nom')
       .then(({ data }) => setDrogues(data || []))
-    supabase.from('parametres').select('*')
-      .then(({ data }) => {
-        const map = {}
-        ;(data || []).forEach(p => {
-          if (p.cle.startsWith('commission_')) map[p.cle.replace('commission_', '')] = Number(p.valeur)
-        })
-        setCommissions(map)
-      })
+    chargerParamsCommission().then(setCommissionParams)
   }, [])
 
   useEffect(() => {
@@ -152,14 +144,15 @@ export default function FicheMembre() {
     })
   }
 
-  const commissionPct  = membre ? (commissions[membre.rang] ?? COMMISSION_PCT) : COMMISSION_PCT
-  const totalAct       = activites.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-  const totalPrixTotal = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.prix_total || 0), 0)
-  const totalBenefice  = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
-  const totalSaisies   = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
-  const brut           = totalAct + totalBenefice
-  const commission     = totalBenefice * commissionPct / 100
-  const net            = brut - commission
+  const calc = membre
+    ? calculerCommission(activites, ventes, membre.rang, commissionParams)
+    : { totalActBrut: 0, cambriolageTotal: 0, deductionBoitiers: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0, base: 0, taux_base: 0, multiplicateur: 1, commission_pct: 0, commission: 0, net: 0, nbATM: 0, boitierCout: 0 }
+  const {
+    totalActBrut, cambriolageTotal, deductionBoitiers,
+    totalPrixTotal, totalBenefice, totalSaisies,
+    base, taux_base, multiplicateur, commission_pct,
+    commission, net, nbATM,
+  } = calc
 
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -186,7 +179,7 @@ export default function FicheMembre() {
           </select>
           {membre && (
             <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-              Prise en main · commission {commissionPct}%
+              Prise en main · taux effectif {commission_pct.toFixed(1)}%
             </span>
           )}
         </div>
@@ -204,11 +197,11 @@ export default function FicheMembre() {
 
           <div className="grid-3">
             <div className="stat-box">
-              <span className="stat-label">Total brut</span>
-              <span className="stat-value">{fmt(brut)}</span>
+              <span className="stat-label">Base commission</span>
+              <span className="stat-value">{fmt(base)}</span>
             </div>
             <div className="stat-box">
-              <span className="stat-label">Commission ({commissionPct}%)</span>
+              <span className="stat-label">Commission ({commission_pct.toFixed(1)}%)</span>
               <span className="stat-value" style={{ color: '#e8a84c' }}>− {fmt(commission)}</span>
             </div>
             <div className="stat-box">
@@ -385,31 +378,57 @@ export default function FicheMembre() {
           {/* Récap */}
           <div className="card">
             <div className="card-title">Récap semaine — {membre.surnom}</div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Activités</th>
-                    <th>Ventes (montant total)</th>
-                    <th>Ventes (bénéfice)</th>
-                    <th>Pertes (saisies)</th>
-                    <th>Total brut</th>
-                    <th>Commission {commissionPct}% <span style={{ fontWeight: 400, opacity: 0.7 }}>(sur bénéf.)</span></th>
-                    <th>Total NET</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style={{ color: 'var(--or-pale)' }}>{fmt(totalAct)}</td>
-                    <td style={{ color: 'var(--texte-soft)' }}>{fmt(totalPrixTotal)}</td>
-                    <td style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</td>
-                    <td style={{ color: '#e05555' }}>− {fmt(totalSaisies)}</td>
-                    <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(brut)}</td>
-                    <td style={{ color: '#e8a84c' }}>− {fmt(commission)}</td>
-                    <td style={{ color: 'var(--or)', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-corps)' }}>{fmt(net)}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--texte-soft)' }}>Activités (hors cambriolage)</span>
+                <span style={{ color: 'var(--or-pale)' }}>{fmt(totalActBrut)}</span>
+              </div>
+              {cambriolageTotal > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--texte-soft)' }}>Cambriolage <span style={{ fontSize: 11, opacity: 0.6 }}>(direct, hors commission)</span></span>
+                  <span style={{ color: 'var(--or-pale)' }}>{fmt(cambriolageTotal)}</span>
+                </div>
+              )}
+              {nbATM > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--texte-soft)' }}>Boitiers ATM ({nbATM}×)</span>
+                  <span style={{ color: '#e05555' }}>− {fmt(deductionBoitiers)}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--texte-soft)' }}>Ventes — montant total</span>
+                <span style={{ color: 'var(--texte-soft)' }}>{fmt(totalPrixTotal)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--texte-soft)' }}>Ventes — bénéfice</span>
+                <span style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</span>
+              </div>
+              {totalSaisies > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--texte-soft)' }}>Pertes saisies</span>
+                  <span style={{ color: '#e05555' }}>− {fmt(totalSaisies)}</span>
+                </div>
+              )}
+              <hr className="sep-or" style={{ margin: '4px 0' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--texte-soft)' }}>Base commission</span>
+                <span style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(base)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--texte-soft)' }}>
+                  Taux effectif
+                  <span style={{ fontSize: 11, opacity: 0.6 }}> ({taux_base}% × {multiplicateur} = {commission_pct.toFixed(1)}%)</span>
+                </span>
+                <span style={{ color: '#e8a84c' }}>− {fmt(commission)}</span>
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between',
+                fontSize: 16, fontFamily: 'var(--font-corps)',
+                padding: '12px 0 0', borderTop: '1px solid var(--or-border)',
+              }}>
+                <span style={{ color: 'var(--or)' }}>Total NET</span>
+                <span style={{ color: 'var(--or-pale)', fontWeight: 700 }}>{fmt(net)}</span>
+              </div>
             </div>
           </div>
         </>

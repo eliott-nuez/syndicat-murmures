@@ -220,3 +220,59 @@ tbody tr:last-child td { border-bottom: none; }
   animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Impression / PDF ────────────────────────────── */
+@media print {
+  /* Masquer tout sauf la zone d'impression */
+  body > * { display: none !important; }
+  #root > * { display: none !important; }
+  #root .print-zone { display: block !important; }
+
+  /* Ré-afficher la zone d'impression et son contexte */
+  #root,
+  #root > div,
+  #root > div > main { display: block !important; }
+
+  .no-print { display: none !important; }
+
+  /* Forcer les couleurs sombres à l'impression */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: #080808 !important;
+    color: #d4cfc5 !important;
+  }
+
+  aside { display: none !important; }
+
+  main {
+    padding: 20px !important;
+    width: 100% !important;
+  }
+
+  .print-zone {
+    display: block !important;
+  }
+
+  .print-header {
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(201,168,76,0.3);
+  }
+
+  .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  table { font-size: 11px; }
+  thead th { font-size: 9px; padding: 6px 8px; }
+  tbody td { padding: 6px 8px; }
+}
+
+.print-zone { }
+.print-header { margin-bottom: 20px; }
+.no-print { }

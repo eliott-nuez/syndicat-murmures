@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
+import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -17,12 +18,12 @@ function localNow() {
 export default function FichePerso() {
   const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
 
-  const [drogues, setDrogues]         = useState([])
-  const [activites, setActivites]     = useState([])
-  const [ventes, setVentes]           = useState([])
-  const [commissionPct, setCommissionPct] = useState(10)
-  const [msg, setMsg]                 = useState({ type: '', text: '' })
-  const [msgMdp, setMsgMdp]           = useState({ type: '', text: '' })
+  const [drogues, setDrogues]               = useState([])
+  const [activites, setActivites]           = useState([])
+  const [ventes, setVentes]                 = useState([])
+  const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
+  const [msg, setMsg]                       = useState({ type: '', text: '' })
+  const [msgMdp, setMsgMdp]                 = useState({ type: '', text: '' })
 
   // Form activité
   const [formAct, setFormAct] = useState({
@@ -48,14 +49,8 @@ export default function FichePerso() {
     fetchDrogues()
     fetchActivitesSemaine()
     fetchVentesSemaine()
-    fetchCommission()
+    chargerParamsCommission().then(setCommissionParams)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const fetchCommission = async () => {
-    const cle = `commission_${membre.rang}`
-    const { data } = await supabase.from('parametres').select('valeur').eq('cle', cle).maybeSingle()
-    if (data) setCommissionPct(Number(data.valeur))
-  }
 
   const fetchDrogues = async () => {
     const { data } = await supabase.from('drogues').select('*').order('nom')
@@ -187,13 +182,13 @@ export default function FichePerso() {
     })
   }
 
-  const totalAct       = activites.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-  const totalPrixTotal = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.prix_total || 0), 0)
-  const totalBenefice  = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
-  const totalSaisies   = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
-  const brut           = totalAct + totalBenefice
-  const commission     = totalBenefice * commissionPct / 100
-  const net            = brut - commission
+  const calc = calculerCommission(activites, ventes, membre.rang, commissionParams)
+  const {
+    totalActBrut, cambriolageTotal, deductionBoitiers,
+    totalPrixTotal, totalBenefice, totalSaisies,
+    base, taux_base, multiplicateur, commission_pct,
+    commission, net, nbATM,
+  } = calc
 
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -415,33 +410,57 @@ export default function FichePerso() {
       {/* ── Récap semaine ── */}
       <div className="card">
         <div className="card-title">Récap semaine</div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Activités</th>
-                <th>Ventes (montant total)</th>
-                <th>Ventes (bénéfice)</th>
-                <th>Pertes (saisies)</th>
-                <th>Total brut</th>
-                <th>Commission {commissionPct}% <span style={{ fontWeight: 400, opacity: 0.7 }}>(sur bénéf.)</span></th>
-                <th>Total NET</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ color: 'var(--or-pale)' }}>{fmt(totalAct)}</td>
-                <td style={{ color: 'var(--texte-soft)' }}>{fmt(totalPrixTotal)}</td>
-                <td style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</td>
-                <td style={{ color: '#e05555' }}>− {fmt(totalSaisies)}</td>
-                <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(brut)}</td>
-                <td style={{ color: '#e8a84c' }}>− {fmt(commission)}</td>
-                <td style={{ color: 'var(--or)', fontWeight: 600, fontSize: 15, fontFamily: 'var(--font-corps)' }}>
-                  {fmt(net)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--texte-soft)' }}>Activités (hors cambriolage)</span>
+            <span style={{ color: 'var(--or-pale)' }}>{fmt(totalActBrut)}</span>
+          </div>
+          {cambriolageTotal > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--texte-soft)' }}>Cambriolage <span style={{ fontSize: 11, opacity: 0.6 }}>(direct, hors commission)</span></span>
+              <span style={{ color: 'var(--or-pale)' }}>{fmt(cambriolageTotal)}</span>
+            </div>
+          )}
+          {nbATM > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--texte-soft)' }}>Boitiers ATM ({nbATM}×)</span>
+              <span style={{ color: '#e05555' }}>− {fmt(deductionBoitiers)}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--texte-soft)' }}>Ventes — montant total</span>
+            <span style={{ color: 'var(--texte-soft)' }}>{fmt(totalPrixTotal)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--texte-soft)' }}>Ventes — bénéfice</span>
+            <span style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</span>
+          </div>
+          {totalSaisies > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--texte-soft)' }}>Pertes saisies</span>
+              <span style={{ color: '#e05555' }}>− {fmt(totalSaisies)}</span>
+            </div>
+          )}
+          <hr className="sep-or" style={{ margin: '4px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--texte-soft)' }}>Base commission</span>
+            <span style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(base)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--texte-soft)' }}>
+              Taux effectif
+              <span style={{ fontSize: 11, opacity: 0.6 }}> ({taux_base}% × {multiplicateur} = {commission_pct.toFixed(1)}%)</span>
+            </span>
+            <span style={{ color: '#e8a84c' }}>− {fmt(commission)}</span>
+          </div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            fontSize: 16, fontFamily: 'var(--font-corps)',
+            padding: '12px 0 0', borderTop: '1px solid var(--or-border)',
+          }}>
+            <span style={{ color: 'var(--or)' }}>Total NET</span>
+            <span style={{ color: 'var(--or-pale)', fontWeight: 700 }}>{fmt(net)}</span>
+          </div>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
+import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 
 export default function RecapGlobal() {
   const [recaps, setRecaps]         = useState([])
@@ -14,43 +15,35 @@ export default function RecapGlobal() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const debutStr    = getDebutSemaineStr()
-    const debutUTC    = getDebutSemaine()
+    const debutStr = getDebutSemaineStr()
+    const debutUTC = getDebutSemaine()
 
-    const { data: paramsData } = await supabase.from('parametres').select('*')
-    const commMap = {}
-    ;(paramsData || []).forEach(p => {
-      if (p.cle.startsWith('commission_')) commMap[p.cle.replace('commission_', '')] = Number(p.valeur)
-    })
-
-    const { data: membresData } = await supabase
-      .from('membres')
-      .select('id, surnom, rang')
-      .order('surnom')
-
-    const { data: activitesData } = await supabase
-      .from('activites')
-      .select('membre_id, somme_argent_sale')
-      .gte('heure_faite', debutStr)
-
-    const { data: ventesData } = await supabase
-      .from('ventes_drogue')
-      .select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id')
-      .gte('created_at', debutUTC.toISOString())
+    const [commissionParams, { data: membresData }, { data: activitesData }, { data: ventesData }] = await Promise.all([
+      chargerParamsCommission(),
+      supabase.from('membres').select('id, surnom, rang').order('surnom'),
+      supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', debutStr),
+      supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id').gte('created_at', debutUTC.toISOString()),
+    ])
 
     const result = (membresData || []).map(m => {
       const acts   = (activitesData || []).filter(a => a.membre_id === m.id)
       const ventes = (ventesData    || []).filter(v => v.membre_id === m.id)
+      const calc   = calculerCommission(acts, ventes, m.rang, commissionParams)
+      const { totalActBrut, cambriolageTotal, totalPrixTotal, totalBenefice, base, commission_pct, commission, net } = calc
 
-      const totalAct       = acts.reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-      const totalPrixTotal = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.prix_total || 0), 0)
-      const totalBenefice  = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.argent_sale || 0), 0)
-      const brut           = totalAct + totalBenefice
-      const commPct        = commMap[m.rang] ?? 10
-      const commission     = totalBenefice * commPct / 100
-      const net            = brut - commission
-
-      return { ...m, totalAct, totalPrixTotal, totalBenefice, brut, commission, net, commPct, nbActivites: acts.length }
+      return {
+        ...m,
+        totalAct: totalActBrut,
+        cambriolageTotal,
+        totalPrixTotal,
+        totalBenefice,
+        brut: totalActBrut + cambriolageTotal + totalBenefice,
+        base,
+        commission_pct,
+        commission,
+        net,
+        nbActivites: acts.length,
+      }
     })
 
     setRecaps(result)
@@ -80,13 +73,15 @@ export default function RecapGlobal() {
   )
 
   const totaux = recaps.reduce((acc, r) => ({
-    totalAct:       acc.totalAct       + r.totalAct,
-    totalPrixTotal: acc.totalPrixTotal + r.totalPrixTotal,
-    totalBenefice:  acc.totalBenefice  + r.totalBenefice,
-    brut:           acc.brut           + r.brut,
-    commission:     acc.commission     + r.commission,
-    net:            acc.net            + r.net,
-  }), { totalAct: 0, totalPrixTotal: 0, totalBenefice: 0, brut: 0, commission: 0, net: 0 })
+    totalAct:        acc.totalAct        + r.totalAct,
+    cambriolageTotal:acc.cambriolageTotal + r.cambriolageTotal,
+    totalPrixTotal:  acc.totalPrixTotal  + r.totalPrixTotal,
+    totalBenefice:   acc.totalBenefice   + r.totalBenefice,
+    brut:            acc.brut            + r.brut,
+    base:            acc.base            + r.base,
+    commission:      acc.commission      + r.commission,
+    net:             acc.net             + r.net,
+  }), { totalAct: 0, cambriolageTotal: 0, totalPrixTotal: 0, totalBenefice: 0, brut: 0, base: 0, commission: 0, net: 0 })
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
@@ -108,12 +103,12 @@ export default function RecapGlobal() {
           <span className="stat-value">{fmt(totaux.brut)}</span>
         </div>
         <div className="stat-box">
-          <span className="stat-label">Activités</span>
+          <span className="stat-label">Activités (hors cambriolage)</span>
           <span className="stat-value">{fmt(totaux.totalAct)}</span>
         </div>
         <div className="stat-box">
-          <span className="stat-label">Ventes</span>
-          <span className="stat-value">{fmt(totaux.totalVentes)}</span>
+          <span className="stat-label">Ventes (bénéfice)</span>
+          <span className="stat-value">{fmt(totaux.totalBenefice)}</span>
         </div>
         <div className="stat-box">
           <span className="stat-label">Total NET gang</span>
@@ -128,15 +123,15 @@ export default function RecapGlobal() {
           <table>
             <thead>
               <tr>
-                <SortTh label="Joueur"           k="surnom" />
-                <SortTh label="Rang"             k="rang" />
-                <SortTh label="Nb activités"     k="nbActivites" />
-                <SortTh label="Activités $"      k="totalAct" />
-                <SortTh label="Ventes (total)"   k="totalPrixTotal" />
-                <SortTh label="Ventes (bénéf.)"  k="totalBenefice" />
-                <SortTh label="Total brut"       k="brut" />
-                <SortTh label="Commission"       k="commission" />
-                <SortTh label="Total NET"        k="net" />
+                <SortTh label="Joueur"            k="surnom" />
+                <SortTh label="Rang"              k="rang" />
+                <SortTh label="Nb activités"      k="nbActivites" />
+                <SortTh label="Activités $"       k="totalAct" />
+                <SortTh label="Cambriolage"       k="cambriolageTotal" />
+                <SortTh label="Ventes (bénéf.)"   k="totalBenefice" />
+                <SortTh label="Base commission"   k="base" />
+                <SortTh label="Commission"        k="commission" />
+                <SortTh label="Total NET"         k="net" />
               </tr>
             </thead>
             <tbody>
@@ -151,10 +146,10 @@ export default function RecapGlobal() {
                   </td>
                   <td style={{ textAlign: 'center' }}>{r.nbActivites}</td>
                   <td>{fmt(r.totalAct)}</td>
-                  <td style={{ color: 'var(--texte-soft)' }}>{fmt(r.totalPrixTotal)}</td>
+                  <td style={{ color: 'var(--texte-soft)' }}>{fmt(r.cambriolageTotal)}</td>
                   <td>{fmt(r.totalBenefice)}</td>
-                  <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.brut)}</td>
-                  <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)} <span style={{ fontSize: 10, opacity: 0.7 }}>({r.commPct}%)</span></td>
+                  <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.base)}</td>
+                  <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)} <span style={{ fontSize: 10, opacity: 0.7 }}>({r.commission_pct.toFixed(1)}%)</span></td>
                   <td style={{ color: 'var(--or)', fontWeight: 600, fontFamily: 'var(--font-corps)', fontSize: 15 }}>
                     {fmt(r.net)}
                   </td>
@@ -168,9 +163,9 @@ export default function RecapGlobal() {
                   Totaux
                 </td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalAct)}</td>
-                <td style={{ color: 'var(--texte-soft)', fontWeight: 600 }}>{fmt(totaux.totalPrixTotal)}</td>
+                <td style={{ color: 'var(--texte-soft)', fontWeight: 600 }}>{fmt(totaux.cambriolageTotal)}</td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalBenefice)}</td>
-                <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.brut)}</td>
+                <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.base)}</td>
                 <td style={{ color: '#e8a84c', fontWeight: 600 }}>− {fmt(totaux.commission)}</td>
                 <td style={{ color: 'var(--or)', fontWeight: 700, fontFamily: 'var(--font-corps)', fontSize: 16 }}>
                   {fmt(totaux.net)}

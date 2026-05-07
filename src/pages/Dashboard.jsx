@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
+import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 
 // Types d'activites avec leurs cooldowns (en heures)
 // Modifier ici si les cooldowns changent
@@ -88,16 +89,24 @@ export default function Dashboard() {
 
     // Totaux gang semaine (direction uniquement)
     if (isDirection) {
-      const [{ data: activites }, { data: ventes }] = await Promise.all([
-        supabase.from('activites').select('somme_argent_sale').gte('heure_faite', getDebutSemaineStr()),
-        supabase.from('ventes_drogue').select('argent_sale').eq('statut', 'Vendu').gte('created_at', getDebutSemaine().toISOString()),
+      const [commParams, { data: activites }, { data: ventes }, { data: membres }] = await Promise.all([
+        chargerParamsCommission(),
+        supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', getDebutSemaineStr()),
+        supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut').gte('created_at', getDebutSemaine().toISOString()),
+        supabase.from('membres').select('id, rang'),
       ])
-      const totalAct    = (activites || []).reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-      const totalVentes = (ventes    || []).reduce((s, v) => s + (v.argent_sale     || 0), 0)
-      const brut        = totalAct + totalVentes
-      const commission  = totalVentes * 0.10
-      const net         = brut - commission
-      setTotauxGang({ brut, commission, net })
+      let totalCommission = 0
+      let totalNet = 0
+      let totalBrut = 0
+      ;(membres || []).forEach(m => {
+        const acts = (activites || []).filter(a => a.membre_id === m.id)
+        const vts  = (ventes    || []).filter(v => v.membre_id === m.id)
+        const c    = calculerCommission(acts, vts, m.rang, commParams)
+        totalCommission += c.commission
+        totalNet        += c.net + c.cambriolageTotal
+        totalBrut       += c.base + c.cambriolageTotal
+      })
+      setTotauxGang({ brut: totalBrut, commission: totalCommission, net: totalNet })
     }
 
     setLoading(false)
@@ -191,58 +200,63 @@ export default function Dashboard() {
 
 // Mini recap integre dans le dashboard
 function RecapSemaineMini({ membreId }) {
+  const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const [recap, setRecap] = useState(null)
 
   useEffect(() => {
     const fetchRecap = async () => {
-      const { data: activites } = await supabase
-        .from('activites')
-        .select('somme_argent_sale')
-        .eq('membre_id', membreId)
-        .gte('heure_faite', getDebutSemaineStr())
+      const [commParams, { data: activites }, { data: ventes }] = await Promise.all([
+        chargerParamsCommission(),
+        supabase.from('activites').select('somme_argent_sale, type_code').eq('membre_id', membreId).gte('heure_faite', getDebutSemaineStr()),
+        supabase.from('ventes_drogue').select('argent_sale, prix_total, statut').eq('membre_id', membreId).gte('created_at', getDebutSemaine().toISOString()),
+      ])
 
-      const { data: ventes } = await supabase
-        .from('ventes_drogue')
-        .select('argent_sale, statut')
-        .eq('membre_id', membreId)
-        .eq('statut', 'Vendu')
-        .gte('created_at', getDebutSemaine().toISOString())
-
-      const totalAct    = (activites || []).reduce((s, a) => s + (a.somme_argent_sale || 0), 0)
-      const totalVentes = (ventes    || []).reduce((s, v) => s + (v.argent_sale || 0), 0)
-      const brut        = totalAct + totalVentes
-      const COMMISSION  = 10
-      const commission  = totalVentes * (COMMISSION / 100)
-      const net         = brut - commission
-
-      setRecap({ totalAct, totalVentes, brut, commission, net, COMMISSION })
+      const calc = calculerCommission(activites || [], ventes || [], membre.rang, commParams)
+      setRecap(calc)
     }
     fetchRecap()
-  }, [membreId])
+  }, [membreId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
   if (!recap) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
 
+  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, base, taux_base, multiplicateur, commission_pct, commission, net } = recap
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span style={{ color: 'var(--texte-soft)' }}>Activités</span>
-        <span>{fmt(recap.totalAct)}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ color: 'var(--texte-soft)' }}>Activités (hors cambriolage)</span>
+        <span>{fmt(totalActBrut)}</span>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span style={{ color: 'var(--texte-soft)' }}>Ventes</span>
-        <span>{fmt(recap.totalVentes)}</span>
+      {cambriolageTotal > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: 'var(--texte-soft)' }}>Cambriolage (direct)</span>
+          <span>{fmt(cambriolageTotal)}</span>
+        </div>
+      )}
+      {nbATM > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: 'var(--texte-soft)' }}>Boitiers ATM ({nbATM}×)</span>
+          <span style={{ color: '#e05555' }}>− {fmt(deductionBoitiers)}</span>
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ color: 'var(--texte-soft)' }}>Ventes (bénéfice)</span>
+        <span>{fmt(totalBenefice)}</span>
       </div>
       <hr className="sep-or" style={{ margin: '4px 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span style={{ color: 'var(--texte-soft)' }}>Total brut</span>
-        <span style={{ color: 'var(--or-pale)' }}>{fmt(recap.brut)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ color: 'var(--texte-soft)' }}>Base commission</span>
+        <span style={{ color: 'var(--or-pale)' }}>{fmt(base)}</span>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span style={{ color: 'var(--texte-soft)' }}>Commission ({recap.COMMISSION}%)</span>
-        <span style={{ color: '#e05555' }}>− {fmt(recap.commission)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span style={{ color: 'var(--texte-soft)' }}>
+          Commission
+          <span style={{ fontSize: 11, opacity: 0.6 }}> ({taux_base}%×{multiplicateur}={commission_pct.toFixed(1)}%)</span>
+        </span>
+        <span style={{ color: '#e05555' }}>− {fmt(commission)}</span>
       </div>
       <div style={{
         display: 'flex', justifyContent: 'space-between',
@@ -251,7 +265,7 @@ function RecapSemaineMini({ membreId }) {
         borderTop: '1px solid var(--or-border)',
       }}>
         <span style={{ color: 'var(--or)' }}>Total NET</span>
-        <span style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(recap.net)}</span>
+        <span style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(net)}</span>
       </div>
     </div>
   )

@@ -12,11 +12,12 @@ const NAV_RESPONSABLE = [
   { to: '/stock',        label: 'Stock',          icon: '◇' },
 ]
 const NAV_DIRECTION = [
-  { to: '/fiche-membre', label: 'Fiche membre',   icon: '◉' },
-  { to: '/drogues',      label: 'Drogues',         icon: '◈' },
-  { to: '/tricount',     label: 'Tricount',        icon: '◆' },
-  { to: '/blanchiment',  label: 'Blanchiment',     icon: '◈' },
-  { to: '/admin',        label: 'Administration',  icon: '⬡' },
+  { to: '/fiche-membre',  label: 'Fiche membre',   icon: '◉' },
+  { to: '/drogues',       label: 'Drogues',         icon: '◈' },
+  { to: '/tricount',      label: 'Tricount',        icon: '◆' },
+  { to: '/blanchiment',   label: 'Blanchiment',     icon: '◈' },
+  { to: '/comptabilite',  label: 'Comptabilité',    icon: '◎' },
+  { to: '/admin',         label: 'Administration',  icon: '⬡' },
 ]
 
 export default function Layout({ children }) {
