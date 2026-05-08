@@ -89,19 +89,22 @@ export default function Dashboard() {
 
     // Totaux gang semaine (direction uniquement)
     if (isDirection) {
-      const [commParams, { data: activites }, { data: ventes }, { data: membres }] = await Promise.all([
+      const debutStr = getDebutSemaineStr()
+      const [commParams, { data: activites }, { data: ventes }, { data: membres }, { data: plants }] = await Promise.all([
         chargerParamsCommission(),
-        supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', getDebutSemaineStr()),
+        supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', debutStr),
         supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut').gte('created_at', getDebutSemaine().toISOString()),
         supabase.from('membres').select('id, rang'),
+        supabase.from('plantations').select('membre_id, benefice').gte('date_plantation', debutStr),
       ])
       let totalCommission = 0
       let totalNet = 0
       let totalBrut = 0
       ;(membres || []).forEach(m => {
-        const acts = (activites || []).filter(a => a.membre_id === m.id)
-        const vts  = (ventes    || []).filter(v => v.membre_id === m.id)
-        const c    = calculerCommission(acts, vts, m.rang, commParams)
+        const acts  = (activites || []).filter(a => a.membre_id === m.id)
+        const vts   = (ventes    || []).filter(v => v.membre_id === m.id)
+        const ps    = (plants    || []).filter(p => p.membre_id === m.id)
+        const c     = calculerCommission(acts, vts, m.rang, commParams, ps)
         totalCommission += c.commission
         totalNet        += c.net + c.cambriolageTotal
         totalBrut       += c.base + c.cambriolageTotal
@@ -205,13 +208,15 @@ function RecapSemaineMini({ membreId }) {
 
   useEffect(() => {
     const fetchRecap = async () => {
-      const [commParams, { data: activites }, { data: ventes }] = await Promise.all([
+      const debutStr = getDebutSemaineStr()
+      const [commParams, { data: activites }, { data: ventes }, { data: plants }] = await Promise.all([
         chargerParamsCommission(),
-        supabase.from('activites').select('somme_argent_sale, type_code').eq('membre_id', membreId).gte('heure_faite', getDebutSemaineStr()),
+        supabase.from('activites').select('somme_argent_sale, type_code').eq('membre_id', membreId).gte('heure_faite', debutStr),
         supabase.from('ventes_drogue').select('argent_sale, prix_total, statut').eq('membre_id', membreId).gte('created_at', getDebutSemaine().toISOString()),
+        supabase.from('plantations').select('benefice').eq('membre_id', membreId).gte('date_plantation', debutStr),
       ])
 
-      const calc = calculerCommission(activites || [], ventes || [], membre.rang, commParams)
+      const calc = calculerCommission(activites || [], ventes || [], membre.rang, commParams, plants || [])
       setRecap(calc)
     }
     fetchRecap()
@@ -222,7 +227,7 @@ function RecapSemaineMini({ membreId }) {
 
   if (!recap) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
 
-  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, base, taux_base, multiplicateur, commission_pct, commission, net } = recap
+  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, totalPlantations, base, taux_base, multiplicateur, commission_pct, commission, net } = recap
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
@@ -246,6 +251,12 @@ function RecapSemaineMini({ membreId }) {
         <span style={{ color: 'var(--texte-soft)' }}>Ventes (bénéfice)</span>
         <span>{fmt(totalBenefice)}</span>
       </div>
+      {totalPlantations > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: 'var(--texte-soft)' }}>Plantations</span>
+          <span>{fmt(totalPlantations)}</span>
+        </div>
+      )}
       <hr className="sep-or" style={{ margin: '4px 0' }} />
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ color: 'var(--texte-soft)' }}>Base commission</span>

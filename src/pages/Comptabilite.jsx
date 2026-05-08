@@ -71,17 +71,19 @@ export default function Comptabilite() {
     setLoading(true)
     setDonnees(null)
 
-    const [commParams, { data: membres }, { data: activites }, { data: ventes }] = await Promise.all([
+    const [commParams, { data: membres }, { data: activites }, { data: ventes }, { data: plantationsData }] = await Promise.all([
       chargerParamsCommission(),
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
       supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', sem.debutLocal).lt('heure_faite', toLocalStr(sem.finUTC)),
       supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut').gte('created_at', sem.debutUTC.toISOString()).lt('created_at', sem.finUTC.toISOString()),
+      supabase.from('plantations').select('membre_id, benefice').gte('date_plantation', sem.debutLocal).lt('date_plantation', toLocalStr(sem.finUTC)),
     ])
 
     const lignes = (membres || []).map(m => {
-      const acts = (activites || []).filter(a => a.membre_id === m.id)
-      const vts  = (ventes    || []).filter(v => v.membre_id === m.id)
-      const c    = calculerCommission(acts, vts, m.rang, commParams)
+      const acts = (activites       || []).filter(a => a.membre_id === m.id)
+      const vts  = (ventes          || []).filter(v => v.membre_id === m.id)
+      const ps   = (plantationsData || []).filter(p => p.membre_id === m.id)
+      const c    = calculerCommission(acts, vts, m.rang, commParams, ps)
       return {
         ...m,
         nbActivites: acts.length,
@@ -93,6 +95,7 @@ export default function Comptabilite() {
         totalPrixTotal:    c.totalPrixTotal,
         totalBenefice:     c.totalBenefice,
         totalSaisies:      c.totalSaisies,
+        totalPlantations:  c.totalPlantations,
         base:              c.base,
         taux_base:         c.taux_base,
         multiplicateur:    c.multiplicateur,
@@ -104,21 +107,22 @@ export default function Comptabilite() {
     })
 
     const totaux = lignes.reduce((acc, r) => ({
-      nbActivites:      acc.nbActivites      + r.nbActivites,
-      totalActBrut:     acc.totalActBrut     + r.totalActBrut,
-      cambriolageTotal: acc.cambriolageTotal + r.cambriolageTotal,
-      deductionBoitiers:acc.deductionBoitiers+ r.deductionBoitiers,
-      totalActNet:      acc.totalActNet      + r.totalActNet,
-      totalPrixTotal:   acc.totalPrixTotal   + r.totalPrixTotal,
-      totalBenefice:    acc.totalBenefice    + r.totalBenefice,
-      totalSaisies:     acc.totalSaisies     + r.totalSaisies,
-      base:             acc.base             + r.base,
-      commission:       acc.commission       + r.commission,
-      net:              acc.net              + r.net,
-      cambriolageBonus: acc.cambriolageBonus + r.cambriolageTotal,
+      nbActivites:       acc.nbActivites       + r.nbActivites,
+      totalActBrut:      acc.totalActBrut      + r.totalActBrut,
+      cambriolageTotal:  acc.cambriolageTotal  + r.cambriolageTotal,
+      deductionBoitiers: acc.deductionBoitiers + r.deductionBoitiers,
+      totalActNet:       acc.totalActNet       + r.totalActNet,
+      totalPrixTotal:    acc.totalPrixTotal    + r.totalPrixTotal,
+      totalBenefice:     acc.totalBenefice     + r.totalBenefice,
+      totalSaisies:      acc.totalSaisies      + r.totalSaisies,
+      totalPlantations:  acc.totalPlantations  + r.totalPlantations,
+      base:              acc.base              + r.base,
+      commission:        acc.commission        + r.commission,
+      net:               acc.net               + r.net,
+      cambriolageBonus:  acc.cambriolageBonus  + r.cambriolageTotal,
     }), {
       nbActivites: 0, totalActBrut: 0, cambriolageTotal: 0, deductionBoitiers: 0,
-      totalActNet: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0,
+      totalActNet: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0, totalPlantations: 0,
       base: 0, commission: 0, net: 0, cambriolageBonus: 0,
     })
 
@@ -175,10 +179,10 @@ export default function Comptabilite() {
             <StatCard label="Activités (hors camb.)" value={fmt(donnees.totaux.totalActBrut)} />
             <StatCard label="Cambriolages (direct)" value={fmt(donnees.totaux.cambriolageTotal)} />
             <StatCard label="Ventes — bénéfice" value={fmt(donnees.totaux.totalBenefice)} />
+            <StatCard label="Plantations — bénéfice" value={fmt(donnees.totaux.totalPlantations)} />
             <StatCard label="Base commission totale" value={fmt(donnees.totaux.base)} />
             <StatCard label="Commission totale" value={fmt(donnees.totaux.commission)} accent="#e8a84c" />
             <StatCard label="Boitiers ATM déduits" value={fmt(donnees.totaux.deductionBoitiers)} accent="#e05555" />
-            <StatCard label="Saisies (pertes)" value={fmt(donnees.totaux.totalSaisies)} accent="#e05555" />
             <StatCard label="Total NET gang" value={fmt(donnees.totaux.net + donnees.totaux.cambriolageTotal)} accent="var(--or)" big />
           </div>
 
@@ -197,6 +201,7 @@ export default function Comptabilite() {
                     <th>Boitiers</th>
                     <th>Ventes total</th>
                     <th>Ventes bénéf.</th>
+                    <th>Plantations</th>
                     <th>Base comm.</th>
                     <th>Taux</th>
                     <th>Commission</th>
@@ -221,6 +226,9 @@ export default function Comptabilite() {
                       </td>
                       <td style={{ color: 'var(--texte-soft)' }}>{fmt(r.totalPrixTotal)}</td>
                       <td>{fmt(r.totalBenefice)}</td>
+                      <td style={{ color: r.totalPlantations > 0 ? '#5cba8a' : 'var(--texte-soft)' }}>
+                        {r.totalPlantations > 0 ? fmt(r.totalPlantations) : '—'}
+                      </td>
                       <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.base)}</td>
                       <td style={{ fontSize: 12 }}>{r.commission_pct.toFixed(1)}%</td>
                       <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)}</td>
@@ -240,6 +248,7 @@ export default function Comptabilite() {
                     <td style={{ color: '#e05555', fontWeight: 600 }}>− {fmt(donnees.totaux.deductionBoitiers)}</td>
                     <td style={{ color: 'var(--texte-soft)', fontWeight: 600 }}>{fmt(donnees.totaux.totalPrixTotal)}</td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(donnees.totaux.totalBenefice)}</td>
+                    <td style={{ color: '#5cba8a', fontWeight: 600 }}>{fmt(donnees.totaux.totalPlantations)}</td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(donnees.totaux.base)}</td>
                     <td></td>
                     <td style={{ color: '#e8a84c', fontWeight: 600 }}>− {fmt(donnees.totaux.commission)}</td>

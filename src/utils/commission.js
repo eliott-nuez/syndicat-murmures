@@ -35,16 +35,16 @@ export async function chargerParamsCommission() {
 }
 
 /**
- * Calcule la commission et le net d'un membre pour une liste d'activités/ventes.
+ * Calcule la commission et le net d'un membre pour une liste d'activités/ventes/plantations.
  *
  * Règles :
  *  - Cambriolage : EXCLU de la base commission (le membre garde directement)
  *  - ATM : coût du boitier déduit automatiquement par activité
- *  - Base = (activités hors cambriolage - boitiers) + bénéfice ventes
+ *  - Base = (activités hors cambriolage - boitiers) + bénéfice ventes + bénéfice plantations
  *  - Taux effectif = taux_tranche × multiplicateur_rang
  *  - Commission = base × taux_effectif / 100
  */
-export function calculerCommission(activites, ventes, rang, { tranches, multiplicateurs, boitierCout }) {
+export function calculerCommission(activites, ventes, rang, { tranches, multiplicateurs, boitierCout }, plantations = []) {
   const actsCamb    = activites.filter(a => a.type_code === 'Cambriolage')
   const actsHorsCamb = activites.filter(a => a.type_code !== 'Cambriolage')
   const nbATM        = activites.filter(a => a.type_code === 'ATM').length
@@ -54,12 +54,14 @@ export function calculerCommission(activites, ventes, rang, { tranches, multipli
   const deductionBoitiers = nbATM * (boitierCout || 0)
   const totalActNet       = Math.max(0, totalActBrut - deductionBoitiers)
 
-  const ventesVendues  = ventes.filter(v => v.statut === 'Vendu')
-  const totalPrixTotal = ventesVendues.reduce((s, v) => s + (v.prix_total || 0), 0)
-  const totalBenefice  = ventesVendues.reduce((s, v) => s + (v.argent_sale  || 0), 0)
-  const totalSaisies   = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
+  const ventesVendues   = ventes.filter(v => v.statut === 'Vendu')
+  const totalPrixTotal  = ventesVendues.reduce((s, v) => s + (v.prix_total || 0), 0)
+  const totalBenefice   = ventesVendues.reduce((s, v) => s + (v.argent_sale  || 0), 0)
+  const totalSaisies    = ventes.filter(v => v.statut === 'Saisie').reduce((s, v) => s + Math.abs(v.argent_sale || 0), 0)
 
-  const base = totalActNet + totalBenefice
+  const totalPlantations = (plantations || []).reduce((s, p) => s + (p.benefice || 0), 0)
+
+  const base = totalActNet + totalBenefice + totalPlantations
 
   // Tranche applicable (ordre croissant)
   const sorted = [...tranches].sort((a, b) => a.ordre - b.ordre)
@@ -75,7 +77,7 @@ export function calculerCommission(activites, ventes, rang, { tranches, multipli
 
   return {
     totalActBrut, cambriolageTotal, deductionBoitiers, totalActNet,
-    totalPrixTotal, totalBenefice, totalSaisies,
+    totalPrixTotal, totalBenefice, totalSaisies, totalPlantations,
     base, taux_base, multiplicateur, commission_pct,
     commission, net, nbATM, boitierCout: boitierCout || 0,
   }

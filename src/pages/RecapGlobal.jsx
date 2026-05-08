@@ -18,18 +18,20 @@ export default function RecapGlobal() {
     const debutStr = getDebutSemaineStr()
     const debutUTC = getDebutSemaine()
 
-    const [commissionParams, { data: membresData }, { data: activitesData }, { data: ventesData }] = await Promise.all([
+    const [commissionParams, { data: membresData }, { data: activitesData }, { data: ventesData }, { data: plantationsData }] = await Promise.all([
       chargerParamsCommission(),
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
       supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', debutStr),
       supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id').gte('created_at', debutUTC.toISOString()),
+      supabase.from('plantations').select('membre_id, benefice').gte('date_plantation', debutStr),
     ])
 
     const result = (membresData || []).map(m => {
-      const acts   = (activitesData || []).filter(a => a.membre_id === m.id)
-      const ventes = (ventesData    || []).filter(v => v.membre_id === m.id)
-      const calc   = calculerCommission(acts, ventes, m.rang, commissionParams)
-      const { totalActBrut, cambriolageTotal, totalPrixTotal, totalBenefice, base, commission_pct, commission, net } = calc
+      const acts   = (activitesData   || []).filter(a => a.membre_id === m.id)
+      const ventes = (ventesData      || []).filter(v => v.membre_id === m.id)
+      const plants = (plantationsData || []).filter(p => p.membre_id === m.id)
+      const calc   = calculerCommission(acts, ventes, m.rang, commissionParams, plants)
+      const { totalActBrut, cambriolageTotal, totalPrixTotal, totalBenefice, totalPlantations, base, commission_pct, commission, net } = calc
 
       return {
         ...m,
@@ -37,7 +39,8 @@ export default function RecapGlobal() {
         cambriolageTotal,
         totalPrixTotal,
         totalBenefice,
-        brut: totalActBrut + cambriolageTotal + totalBenefice,
+        totalPlantations,
+        brut: totalActBrut + cambriolageTotal + totalBenefice + totalPlantations,
         base,
         commission_pct,
         commission,
@@ -73,15 +76,16 @@ export default function RecapGlobal() {
   )
 
   const totaux = recaps.reduce((acc, r) => ({
-    totalAct:        acc.totalAct        + r.totalAct,
-    cambriolageTotal:acc.cambriolageTotal + r.cambriolageTotal,
-    totalPrixTotal:  acc.totalPrixTotal  + r.totalPrixTotal,
-    totalBenefice:   acc.totalBenefice   + r.totalBenefice,
-    brut:            acc.brut            + r.brut,
-    base:            acc.base            + r.base,
-    commission:      acc.commission      + r.commission,
-    net:             acc.net             + r.net,
-  }), { totalAct: 0, cambriolageTotal: 0, totalPrixTotal: 0, totalBenefice: 0, brut: 0, base: 0, commission: 0, net: 0 })
+    totalAct:         acc.totalAct         + r.totalAct,
+    cambriolageTotal: acc.cambriolageTotal  + r.cambriolageTotal,
+    totalPrixTotal:   acc.totalPrixTotal   + r.totalPrixTotal,
+    totalBenefice:    acc.totalBenefice    + r.totalBenefice,
+    totalPlantations: acc.totalPlantations + r.totalPlantations,
+    brut:             acc.brut             + r.brut,
+    base:             acc.base             + r.base,
+    commission:       acc.commission       + r.commission,
+    net:              acc.net              + r.net,
+  }), { totalAct: 0, cambriolageTotal: 0, totalPrixTotal: 0, totalBenefice: 0, totalPlantations: 0, brut: 0, base: 0, commission: 0, net: 0 })
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
@@ -129,6 +133,7 @@ export default function RecapGlobal() {
                 <SortTh label="Activités $"       k="totalAct" />
                 <SortTh label="Cambriolage"       k="cambriolageTotal" />
                 <SortTh label="Ventes (bénéf.)"   k="totalBenefice" />
+                <SortTh label="Plantations"       k="totalPlantations" />
                 <SortTh label="Base commission"   k="base" />
                 <SortTh label="Commission"        k="commission" />
                 <SortTh label="Total NET"         k="net" />
@@ -148,6 +153,7 @@ export default function RecapGlobal() {
                   <td>{fmt(r.totalAct)}</td>
                   <td style={{ color: 'var(--texte-soft)' }}>{fmt(r.cambriolageTotal)}</td>
                   <td>{fmt(r.totalBenefice)}</td>
+                  <td style={{ color: r.totalPlantations > 0 ? 'var(--or-pale)' : 'var(--texte-soft)' }}>{fmt(r.totalPlantations)}</td>
                   <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.base)}</td>
                   <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)} <span style={{ fontSize: 10, opacity: 0.7 }}>({r.commission_pct.toFixed(1)}%)</span></td>
                   <td style={{ color: 'var(--or)', fontWeight: 600, fontFamily: 'var(--font-corps)', fontSize: 15 }}>
@@ -165,6 +171,7 @@ export default function RecapGlobal() {
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalAct)}</td>
                 <td style={{ color: 'var(--texte-soft)', fontWeight: 600 }}>{fmt(totaux.cambriolageTotal)}</td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalBenefice)}</td>
+                <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalPlantations)}</td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.base)}</td>
                 <td style={{ color: '#e8a84c', fontWeight: 600 }}>− {fmt(totaux.commission)}</td>
                 <td style={{ color: 'var(--or)', fontWeight: 700, fontFamily: 'var(--font-corps)', fontSize: 16 }}>

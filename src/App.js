@@ -16,6 +16,7 @@ import Drogues        from './pages/Drogues'
 import Calendrier     from './pages/Calendrier'
 import Comptabilite   from './pages/Comptabilite'
 import VentesGroupe   from './pages/VentesGroupe'
+import Plantation     from './pages/Plantation'
 import Layout         from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -38,6 +39,7 @@ export default function App() {
         {/* Tous membres connectés */}
         <Route path="/dashboard"   element={<AppLayout><Dashboard /></AppLayout>} />
         <Route path="/fiche"       element={<AppLayout><FichePerso /></AppLayout>} />
+        <Route path="/plantation"  element={<AppLayout><Plantation /></AppLayout>} />
         <Route path="/calendrier"  element={<AppLayout><Calendrier /></AppLayout>} />
 
         {/* Responsable + Direction */}

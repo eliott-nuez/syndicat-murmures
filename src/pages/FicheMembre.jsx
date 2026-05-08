@@ -23,6 +23,7 @@ export default function FicheMembre() {
   const [drogues, setDrogues]               = useState([])
   const [activites, setActivites]           = useState([])
   const [ventes, setVentes]                 = useState([])
+  const [plantations, setPlantations]       = useState([])
   const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
   const [msg, setMsg]                       = useState({ type: '', text: '' })
 
@@ -48,13 +49,23 @@ export default function FicheMembre() {
   }, [])
 
   useEffect(() => {
-    if (!membreId) { setActivites([]); setVentes([]); return }
+    if (!membreId) { setActivites([]); setVentes([]); setPlantations([]); return }
     fetchActivites()
     fetchVentes()
+    fetchPlantations()
     setMsg({ type: '', text: '' })
     setFormAct({ type_code: 'ATM', somme_argent_sale: '', note: '', heure_faite: localNow() })
     setLignesVente([emptyLigne()])
   }, [membreId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchPlantations = async () => {
+    const { data } = await supabase
+      .from('plantations')
+      .select('benefice')
+      .eq('membre_id', membreId)
+      .gte('date_plantation', getDebutSemaineStr())
+    setPlantations(data || [])
+  }
 
   const fetchActivites = async () => {
     const { data } = await supabase
@@ -145,11 +156,11 @@ export default function FicheMembre() {
   }
 
   const calc = membre
-    ? calculerCommission(activites, ventes, membre.rang, commissionParams)
-    : { totalActBrut: 0, cambriolageTotal: 0, deductionBoitiers: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0, base: 0, taux_base: 0, multiplicateur: 1, commission_pct: 0, commission: 0, net: 0, nbATM: 0, boitierCout: 0 }
+    ? calculerCommission(activites, ventes, membre.rang, commissionParams, plantations)
+    : { totalActBrut: 0, cambriolageTotal: 0, deductionBoitiers: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0, totalPlantations: 0, base: 0, taux_base: 0, multiplicateur: 1, commission_pct: 0, commission: 0, net: 0, nbATM: 0, boitierCout: 0 }
   const {
     totalActBrut, cambriolageTotal, deductionBoitiers,
-    totalPrixTotal, totalBenefice, totalSaisies,
+    totalPrixTotal, totalBenefice, totalSaisies, totalPlantations,
     base, taux_base, multiplicateur, commission_pct,
     commission, net, nbATM,
   } = calc
@@ -403,6 +414,12 @@ export default function FicheMembre() {
                 <span style={{ color: 'var(--texte-soft)' }}>Ventes — bénéfice</span>
                 <span style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</span>
               </div>
+              {totalPlantations > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--texte-soft)' }}>Plantations — bénéfice</span>
+                  <span style={{ color: 'var(--or-pale)' }}>{fmt(totalPlantations)}</span>
+                </div>
+              )}
               {totalSaisies > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--texte-soft)' }}>Pertes saisies</span>

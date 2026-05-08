@@ -5,6 +5,7 @@ import { useInactivityLogout } from '../hooks/useInactivityLogout'
 const NAV_TOUS = [
   { to: '/dashboard',   label: 'Dashboard',      icon: '◈' },
   { to: '/fiche',       label: 'Ma fiche perso',  icon: '◉' },
+  { to: '/plantation',  label: 'Plantation',      icon: '◇' },
   { to: '/calendrier',  label: 'Calendrier',      icon: '◻' },
 ]
 const NAV_RESPONSABLE = [

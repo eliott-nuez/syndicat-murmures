@@ -21,6 +21,7 @@ export default function FichePerso() {
   const [drogues, setDrogues]               = useState([])
   const [activites, setActivites]           = useState([])
   const [ventes, setVentes]                 = useState([])
+  const [plantations, setPlantations]       = useState([])
   const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
   const [msg, setMsg]                       = useState({ type: '', text: '' })
   const [msgMdp, setMsgMdp]                 = useState({ type: '', text: '' })
@@ -49,8 +50,18 @@ export default function FichePerso() {
     fetchDrogues()
     fetchActivitesSemaine()
     fetchVentesSemaine()
+    fetchPlantationsSemaine()
     chargerParamsCommission().then(setCommissionParams)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchPlantationsSemaine = async () => {
+    const { data } = await supabase
+      .from('plantations')
+      .select('benefice')
+      .eq('membre_id', membre.id)
+      .gte('date_plantation', getDebutSemaineStr())
+    setPlantations(data || [])
+  }
 
   const fetchDrogues = async () => {
     const { data } = await supabase.from('drogues').select('*').order('nom')
@@ -182,10 +193,10 @@ export default function FichePerso() {
     })
   }
 
-  const calc = calculerCommission(activites, ventes, membre.rang, commissionParams)
+  const calc = calculerCommission(activites, ventes, membre.rang, commissionParams, plantations)
   const {
     totalActBrut, cambriolageTotal, deductionBoitiers,
-    totalPrixTotal, totalBenefice, totalSaisies,
+    totalPrixTotal, totalBenefice, totalSaisies, totalPlantations,
     base, taux_base, multiplicateur, commission_pct,
     commission, net, nbATM,
   } = calc
@@ -435,6 +446,12 @@ export default function FichePerso() {
             <span style={{ color: 'var(--texte-soft)' }}>Ventes — bénéfice</span>
             <span style={{ color: 'var(--or-pale)' }}>{fmt(totalBenefice)}</span>
           </div>
+          {totalPlantations > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--texte-soft)' }}>Plantations — bénéfice</span>
+              <span style={{ color: 'var(--or-pale)' }}>{fmt(totalPlantations)}</span>
+            </div>
+          )}
           {totalSaisies > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--texte-soft)' }}>Pertes saisies</span>
