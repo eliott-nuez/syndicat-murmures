@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-// Prix de vente par branche en argent sale (configurable ici si besoin)
+// Prix de vente par branche en argent sale
 const PRIX_VENTE_BRANCHE = 70
 
 function localNow() {
@@ -19,16 +19,15 @@ const fmt = (v) =>
 export default function Plantation() {
   const membreCourant = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
 
-  const [membres, setMembres]       = useState([])
-  const [drogues, setDrogues]       = useState([])
+  const [membres, setMembres]         = useState([])
+  const [branche, setBranche]         = useState(null)   // drogue "Branche" auto-chargée
   const [plantations, setPlantations] = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [saving, setSaving]         = useState(false)
-  const [msg, setMsg]               = useState({ type: '', text: '' })
+  const [loading, setLoading]         = useState(true)
+  const [saving, setSaving]           = useState(false)
+  const [msg, setMsg]                 = useState({ type: '', text: '' })
 
   const [form, setForm] = useState({
     membre_id:       membreCourant.id || '',
-    drogue_id:       '',
     nb_pots:         '',
     nb_branches:     '',
     date_plantation: localNow(),
@@ -39,34 +38,31 @@ export default function Plantation() {
 
   const fetchData = async () => {
     setLoading(true)
-    const [{ data: m }, { data: d }, { data: p }] = await Promise.all([
+    const [{ data: m }, { data: b }, { data: p }] = await Promise.all([
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
-      supabase.from('drogues').select('*').eq('actif', true).ilike('nom', '%branche%').order('nom'),
+      supabase.from('drogues').select('*').ilike('nom', 'branche').eq('actif', true).maybeSingle(),
       supabase.from('plantations')
-        .select('*, membres(surnom), drogues(nom, prix_revient)')
+        .select('*, membres(surnom)')
         .order('date_plantation', { ascending: false })
         .limit(200),
     ])
     setMembres(m || [])
-    setDrogues(d || [])
+    setBranche(b || null)
     setPlantations(p || [])
     setLoading(false)
   }
 
   // Calculs auto
-  const drogue         = drogues.find(d => d.id === form.drogue_id)
-  const nb_pots        = parseInt(form.nb_pots)     || 0
-  const nb_branches    = parseInt(form.nb_branches) || 0
-  const branches_par_pot = nb_pots > 0 && nb_branches > 0
-    ? Math.round(nb_branches / nb_pots)
-    : null
-  const beneficeCalc   = drogue && nb_branches > 0
-    ? nb_branches * (PRIX_VENTE_BRANCHE - drogue.prix_revient)
+  const nb_pots          = parseInt(form.nb_pots)     || 0
+  const nb_branches      = parseInt(form.nb_branches) || 0
+  const branches_par_pot = nb_pots > 0 && nb_branches > 0 ? Math.round(nb_branches / nb_pots) : null
+  const beneficeCalc     = branche && nb_branches > 0
+    ? nb_branches * (PRIX_VENTE_BRANCHE - branche.prix_revient)
     : null
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.membre_id || !form.drogue_id || !nb_pots || !nb_branches) {
+    if (!form.membre_id || !nb_pots || !nb_branches) {
       setMsg({ type: 'error', text: 'Tous les champs obligatoires doivent être remplis.' })
       return
     }
@@ -74,14 +70,14 @@ export default function Plantation() {
     setMsg({ type: '', text: '' })
 
     const { error } = await supabase.from('plantations').insert({
-      membre_id:       form.membre_id,
-      drogue_id:       form.drogue_id,
+      membre_id:        form.membre_id,
+      drogue_id:        branche?.id || null,
       nb_pots,
       nb_branches,
       branches_par_pot: branches_par_pot ?? 0,
-      benefice:        beneficeCalc ?? 0,
-      date_plantation: form.date_plantation.replace('T', ' ') + ':00',
-      note:            form.note || null,
+      benefice:         beneficeCalc ?? 0,
+      date_plantation:  form.date_plantation.replace('T', ' ') + ':00',
+      note:             form.note || null,
     })
 
     setSaving(false)
@@ -97,9 +93,9 @@ export default function Plantation() {
 
   // Totaux historique
   const totaux = plantations.reduce((acc, p) => ({
-    nb_pots:    acc.nb_pots    + (p.nb_pots    || 0),
-    nb_branches:acc.nb_branches+ (p.nb_branches|| 0),
-    benefice:   acc.benefice   + (p.benefice   || 0),
+    nb_pots:     acc.nb_pots     + (p.nb_pots     || 0),
+    nb_branches: acc.nb_branches + (p.nb_branches || 0),
+    benefice:    acc.benefice    + (p.benefice    || 0),
   }), { nb_pots: 0, nb_branches: 0, benefice: 0 })
 
   return (
@@ -112,6 +108,15 @@ export default function Plantation() {
         <h1 style={{ fontFamily: 'var(--font-titre)', fontSize: 24, color: 'var(--or-pale)', letterSpacing: '0.05em' }}>
           Plantation & Récolte
         </h1>
+        {branche && (
+          <div style={{ fontSize: 12, color: 'var(--texte-soft)', marginTop: 6 }}>
+            Produit : <span style={{ color: 'var(--or-pale)' }}>{branche.nom}</span>
+            <span style={{ margin: '0 8px', opacity: 0.4 }}>·</span>
+            Coût revient : <span style={{ color: 'var(--or-pale)' }}>{fmt(branche.prix_revient)}/u</span>
+            <span style={{ margin: '0 8px', opacity: 0.4 }}>·</span>
+            Prix vente : <span style={{ color: 'var(--or-pale)' }}>{PRIX_VENTE_BRANCHE}$/u</span>
+          </div>
+        )}
       </div>
 
       {msg.text && (
@@ -132,19 +137,6 @@ export default function Plantation() {
                 {membres.map(m => (
                   <option key={m.id} value={m.id}>
                     {m.surnom} ({m.rang}){m.id === membreCourant.id ? ' — moi' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Produit récolté *</label>
-              <select className="form-select" value={form.drogue_id}
-                onChange={e => setForm(f => ({ ...f, drogue_id: e.target.value }))}>
-                <option value="">— Sélectionner —</option>
-                {drogues.map(d => (
-                  <option key={d.id} value={d.id}>
-                    {d.nom} (rev. {fmt(d.prix_revient)}/u)
                   </option>
                 ))}
               </select>
@@ -177,9 +169,9 @@ export default function Plantation() {
             <div className="form-group">
               <label className="form-label">
                 Bénéfice estimé (auto)
-                {drogue && (
+                {branche && nb_branches > 0 && (
                   <span style={{ fontSize: 10, opacity: 0.6, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>
-                    {nb_branches} × ({PRIX_VENTE_BRANCHE}$ − {fmt(drogue.prix_revient)})
+                    {nb_branches.toLocaleString('fr-FR')} × ({PRIX_VENTE_BRANCHE} − {branche.prix_revient})
                   </span>
                 )}
               </label>
@@ -189,9 +181,7 @@ export default function Plantation() {
                   : '—'}
                 style={{
                   opacity: 0.9,
-                  color: beneficeCalc !== null
-                    ? (beneficeCalc >= 0 ? '#5cba8a' : '#e05555')
-                    : undefined,
+                  color: beneficeCalc !== null ? (beneficeCalc >= 0 ? '#5cba8a' : '#e05555') : undefined,
                   fontWeight: 600,
                 }} />
             </div>
@@ -213,7 +203,7 @@ export default function Plantation() {
           </div>
 
           {/* Récap avant envoi */}
-          {drogue && nb_pots > 0 && nb_branches > 0 && (
+          {nb_pots > 0 && nb_branches > 0 && (
             <div style={{
               background: 'rgba(201,168,76,0.06)',
               border: '1px solid var(--or-border)',
@@ -237,16 +227,20 @@ export default function Plantation() {
                 <span style={{ color: 'var(--texte-soft)' }}>Branches : </span>
                 <strong>{nb_branches.toLocaleString('fr-FR')}</strong>
               </span>
-              <span>
-                <span style={{ color: 'var(--texte-soft)' }}>Moy. : </span>
-                <strong>{branches_par_pot} / pot</strong>
-              </span>
-              <span>
-                <span style={{ color: 'var(--texte-soft)' }}>Bénéfice : </span>
-                <strong style={{ color: beneficeCalc >= 0 ? '#5cba8a' : '#e05555' }}>
-                  {fmt(beneficeCalc ?? 0)}
-                </strong>
-              </span>
+              {branches_par_pot !== null && (
+                <span>
+                  <span style={{ color: 'var(--texte-soft)' }}>Moy. : </span>
+                  <strong>{branches_par_pot} / pot</strong>
+                </span>
+              )}
+              {beneficeCalc !== null && (
+                <span>
+                  <span style={{ color: 'var(--texte-soft)' }}>Bénéfice : </span>
+                  <strong style={{ color: beneficeCalc >= 0 ? '#5cba8a' : '#e05555' }}>
+                    {fmt(beneficeCalc)}
+                  </strong>
+                </span>
+              )}
             </div>
           )}
 
@@ -291,7 +285,6 @@ export default function Plantation() {
                 <tr>
                   <th>Date</th>
                   <th>Membre</th>
-                  <th>Produit</th>
                   <th style={{ textAlign: 'center' }}>Pots</th>
                   <th style={{ textAlign: 'center' }}>Branches</th>
                   <th style={{ textAlign: 'center' }}>Moy./pot</th>
@@ -306,7 +299,6 @@ export default function Plantation() {
                       {fmtDate(p.date_plantation)}
                     </td>
                     <td style={{ fontWeight: 500 }}>{p.membres?.surnom || '—'}</td>
-                    <td style={{ color: 'var(--texte-soft)' }}>{p.drogues?.nom || '—'}</td>
                     <td style={{ textAlign: 'center' }}>{(p.nb_pots || 0).toLocaleString('fr-FR')}</td>
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>
                       {(p.nb_branches || 0).toLocaleString('fr-FR')}
@@ -326,7 +318,7 @@ export default function Plantation() {
               </tbody>
               <tfoot>
                 <tr style={{ borderTop: '2px solid var(--or-border)' }}>
-                  <td colSpan={3} style={{ color: 'var(--or)', fontWeight: 600, padding: '12px 14px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  <td colSpan={2} style={{ color: 'var(--or)', fontWeight: 600, padding: '12px 14px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                     Totaux
                   </td>
                   <td style={{ textAlign: 'center', color: 'var(--or-pale)', fontWeight: 700 }}>
