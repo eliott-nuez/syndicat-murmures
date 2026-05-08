@@ -41,7 +41,7 @@ export default function Plantation() {
     setLoading(true)
     const [{ data: m }, { data: d }, { data: p }] = await Promise.all([
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
-      supabase.from('drogues').select('*').eq('actif', true).order('nom'),
+      supabase.from('drogues').select('*').eq('actif', true).ilike('nom', '%branche%').order('nom'),
       supabase.from('plantations')
         .select('*, membres(surnom), drogues(nom, prix_revient)')
         .order('date_plantation', { ascending: false })
