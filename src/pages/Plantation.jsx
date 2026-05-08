@@ -163,7 +163,13 @@ export default function Plantation() {
               <label className="form-label">Branches / pot (auto)</label>
               <input className="form-input" type="text" disabled
                 value={branches_par_pot !== null ? `${branches_par_pot} branches / pot` : '—'}
-                style={{ opacity: 0.55 }} />
+                style={{
+                  fontWeight: branches_par_pot !== null ? 600 : undefined,
+                  color: branches_par_pot === null ? undefined
+                    : branches_par_pot >= 8 ? '#5cba8a'
+                    : branches_par_pot === 7 ? '#e8a84c'
+                    : '#e05555',
+                }} />
             </div>
 
             <div className="form-group">
@@ -303,7 +309,14 @@ export default function Plantation() {
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>
                       {(p.nb_branches || 0).toLocaleString('fr-FR')}
                     </td>
-                    <td style={{ textAlign: 'center', color: 'var(--texte-soft)', fontSize: 12 }}>
+                    <td style={{
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      color: !p.branches_par_pot ? 'var(--texte-soft)'
+                        : p.branches_par_pot >= 8 ? '#5cba8a'
+                        : p.branches_par_pot === 7 ? '#e8a84c'
+                        : '#e05555'
+                    }}>
                       {p.branches_par_pot || '—'}
                     </td>
                     <td style={{ fontWeight: 600 }}>
