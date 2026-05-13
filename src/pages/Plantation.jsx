@@ -70,13 +70,28 @@ export default function Plantation() {
     setSaving(true)
     setMsg({ type: '', text: '' })
 
+    // Si la drogue n'est pas encore chargée, on la re-fetch au moment du submit
+    let drogueActive = branche
+    if (!drogueActive) {
+      const { data } = await supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle()
+      drogueActive = data
+      if (drogueActive) setBranche(drogueActive)
+    }
+    if (!drogueActive) {
+      setMsg({ type: 'error', text: 'Impossible de trouver la drogue "Branche" — recharge la page.' })
+      setSaving(false)
+      return
+    }
+
+    const beneficeFinal = nb_branches * (PRIX_VENTE_BRANCHE - drogueActive.prix_revient)
+
     const { error } = await supabase.from('plantations').insert({
       membre_id:        form.membre_id,
-      drogue_id:        branche?.id || null,
+      drogue_id:        drogueActive.id,
       nb_pots,
       nb_branches,
       branches_par_pot: branches_par_pot ?? 0,
-      benefice:         beneficeCalc ?? 0,
+      benefice:         beneficeFinal,
       date_plantation:  form.date_plantation.replace('T', ' ') + ':00',
       note:             form.note || null,
     })
