@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { getDebutSemaineStr } from '../utils/temps'
 
 // Prix de vente par branche en argent sale
 const PRIX_VENTE_BRANCHE = 70
@@ -40,11 +41,11 @@ export default function Plantation() {
     setLoading(true)
     const [{ data: m }, { data: b }, { data: p }] = await Promise.all([
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
-      supabase.from('drogues').select('*').ilike('nom', 'branche').maybeSingle(),
+      supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle(),
       supabase.from('plantations')
         .select('*, membres(surnom)')
-        .order('date_plantation', { ascending: false })
-        .limit(200),
+        .gte('date_plantation', getDebutSemaineStr())
+        .order('date_plantation', { ascending: false }),
     ])
     setMembres(m || [])
     setBranche(b || null)
