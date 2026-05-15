@@ -77,6 +77,8 @@ export default function Administration() {
   const [showFormTranche, setShowFormTranche] = useState(false)
   const [savingComm, setSavingComm]         = useState(false)
   const [msgComm, setMsgComm]              = useState({ type: '', text: '' })
+  const [editTaux, setEditTaux]             = useState({}) // { [id]: string }
+
 
   useEffect(() => {
     fetchMembres()
@@ -194,6 +196,18 @@ export default function Administration() {
     fetchCommission()
   }
 
+  const handleUpdateTaux = async (id) => {
+    const val = parseFloat(editTaux[id])
+    if (isNaN(val) || val < 0 || val > 100) {
+      setMsgComm({ type: 'error', text: 'Taux invalide (0–100).' }); return
+    }
+    const { error } = await supabase.from('tranches_commission').update({ taux_pct: val }).eq('id', id)
+    if (error) { setMsgComm({ type: 'error', text: error.message }); return }
+    setMsgComm({ type: 'success', text: 'Taux mis à jour.' })
+    setEditTaux(prev => { const n = { ...prev }; delete n[id]; return n })
+    fetchCommission()
+  }
+
   const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR')
   const fmt = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
@@ -307,7 +321,31 @@ export default function Administration() {
                     <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
                       {fmt(t.min_montant)} → {t.max_montant !== null ? fmt(t.max_montant) : '∞'}
                     </td>
-                    <td style={{ fontWeight: 600 }}>{t.taux_pct}%</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {editTaux[t.id] !== undefined ? (
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <input
+                            className="form-input" type="number" min="0" max="100" step="0.1"
+                            style={{ width: 70, padding: '3px 7px', fontSize: 13 }}
+                            value={editTaux[t.id]}
+                            onChange={e => setEditTaux(prev => ({ ...prev, [t.id]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') handleUpdateTaux(t.id); if (e.key === 'Escape') setEditTaux(prev => { const n = { ...prev }; delete n[t.id]; return n }) }}
+                            autoFocus
+                          />
+                          <span style={{ fontSize: 13 }}>%</span>
+                          <button className="btn btn-solid btn-sm" onClick={() => handleUpdateTaux(t.id)}>✓</button>
+                          <button className="btn btn-or btn-sm" onClick={() => setEditTaux(prev => { const n = { ...prev }; delete n[t.id]; return n })}>✕</button>
+                        </div>
+                      ) : (
+                        <span
+                          style={{ cursor: 'pointer', borderBottom: '1px dashed var(--or-border)', paddingBottom: 1 }}
+                          title="Cliquer pour modifier"
+                          onClick={() => setEditTaux(prev => ({ ...prev, [t.id]: String(t.taux_pct) }))}
+                        >
+                          {t.taux_pct}% ✎
+                        </span>
+                      )}
+                    </td>
                     {['membre', 'responsable', 'direction'].map(r => (
                       <td key={r} style={{ color: 'var(--or)', fontWeight: 600 }}>
                         {(t.taux_pct * (Number(multis[r]) || 1)).toFixed(1)}%
