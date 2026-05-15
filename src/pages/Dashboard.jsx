@@ -227,7 +227,7 @@ function RecapSemaineMini({ membreId }) {
 
   if (!recap) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
 
-  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, totalPlantations, base, taux_base, multiplicateur, commission_pct, commission, net } = recap
+  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, totalPlantations, base, multiplicateur, commission_pct, commission, net, tranches_detail } = recap
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
@@ -265,7 +265,12 @@ function RecapSemaineMini({ membreId }) {
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ color: 'var(--texte-soft)' }}>
           Commission
-          <span style={{ fontSize: 11, opacity: 0.6 }}> ({taux_base}%×{multiplicateur}={commission_pct.toFixed(1)}%)</span>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>
+            {tranches_detail && tranches_detail.length > 0
+              ? tranches_detail.map(t => `${t.taux_effectif}% sur ${Math.round(t.portion).toLocaleString('fr-FR')}$`).join(' + ')
+              : `×${multiplicateur}`}
+            {' — '}taux moy. {commission_pct.toFixed(1)}%
+          </span>
         </span>
         <span style={{ color: '#e05555' }}>− {fmt(commission)}</span>
       </div>

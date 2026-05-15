@@ -97,7 +97,6 @@ export default function Comptabilite() {
         totalSaisies:      c.totalSaisies,
         totalPlantations:  c.totalPlantations,
         base:              c.base,
-        taux_base:         c.taux_base,
         multiplicateur:    c.multiplicateur,
         commission_pct:    c.commission_pct,
         commission:        c.commission,

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 const RANGS = ['membre', 'responsable', 'direction']
-const TYPES_ACTIVITE = ['', 'ATM', 'Cambriolage', 'Supérette', 'Go Fast', 'Plantation']
 
 export default function Administration() {
   // ── Membres ────────────────────────────────────────────────────────────────

@@ -197,8 +197,8 @@ export default function FichePerso() {
   const {
     totalActBrut, cambriolageTotal, deductionBoitiers,
     totalPrixTotal, totalBenefice, totalSaisies, totalPlantations,
-    base, taux_base, multiplicateur, commission_pct,
-    commission, net, nbATM,
+    base, multiplicateur, commission_pct,
+    commission, net, nbATM, tranches_detail,
   } = calc
 
   const fmt = (v) =>
@@ -466,7 +466,12 @@ export default function FichePerso() {
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--texte-soft)' }}>
               Taux effectif
-              <span style={{ fontSize: 11, opacity: 0.6 }}> ({taux_base}% × {multiplicateur} = {commission_pct.toFixed(1)}%)</span>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>
+                {tranches_detail.length > 0
+                  ? tranches_detail.map(t => `${t.taux_effectif}% sur ${Math.round(t.portion).toLocaleString('fr-FR')}$`).join(' + ')
+                  : `×${multiplicateur}`}
+                {' — '}taux moy. {commission_pct.toFixed(1)}%
+              </span>
             </span>
             <span style={{ color: '#e8a84c' }}>− {fmt(commission)}</span>
           </div>

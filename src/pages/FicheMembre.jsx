@@ -157,12 +157,12 @@ export default function FicheMembre() {
 
   const calc = membre
     ? calculerCommission(activites, ventes, membre.rang, commissionParams, plantations)
-    : { totalActBrut: 0, cambriolageTotal: 0, deductionBoitiers: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0, totalPlantations: 0, base: 0, taux_base: 0, multiplicateur: 1, commission_pct: 0, commission: 0, net: 0, nbATM: 0, boitierCout: 0 }
+    : { totalActBrut: 0, cambriolageTotal: 0, deductionBoitiers: 0, totalPrixTotal: 0, totalBenefice: 0, totalSaisies: 0, totalPlantations: 0, base: 0, multiplicateur: 1, commission_pct: 0, commission: 0, net: 0, nbATM: 0, boitierCout: 0, tranches_detail: [] }
   const {
     totalActBrut, cambriolageTotal, deductionBoitiers,
     totalPrixTotal, totalBenefice, totalSaisies, totalPlantations,
-    base, taux_base, multiplicateur, commission_pct,
-    commission, net, nbATM,
+    base, multiplicateur, commission_pct,
+    commission, net, nbATM, tranches_detail,
   } = calc
 
   const fmt = (v) =>
@@ -434,7 +434,12 @@ export default function FicheMembre() {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--texte-soft)' }}>
                   Taux effectif
-                  <span style={{ fontSize: 11, opacity: 0.6 }}> ({taux_base}% × {multiplicateur} = {commission_pct.toFixed(1)}%)</span>
+                  <span style={{ fontSize: 11, opacity: 0.6 }}>
+                    {tranches_detail.length > 0
+                      ? tranches_detail.map(t => `${t.taux_effectif}% sur ${Math.round(t.portion).toLocaleString('fr-FR')}$`).join(' + ')
+                      : `×${multiplicateur}`}
+                    {' — '}taux moy. {commission_pct.toFixed(1)}%
+                  </span>
                 </span>
                 <span style={{ color: '#e8a84c' }}>− {fmt(commission)}</span>
               </div>
