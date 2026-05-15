@@ -21,20 +21,54 @@ export default function Administration() {
   const [botOutput, setBotOutput]   = useState('')
 
   const botControl = async (action) => {
-    setBotAction('loading'); setBotOutput('')
+    setBotAction('loading'); setBotOutput(null)
     try {
-      const res = await fetch('/api/bot-control', {
+      const res  = await fetch('/api/bot-control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       })
       const data = await res.json()
-      setBotOutput(data.output || data.error || JSON.stringify(data))
+      setBotOutput({ action, ...data })
       setBotAction(res.ok ? 'done' : 'error')
     } catch (err) {
-      setBotOutput(err.message)
+      setBotOutput({ error: err.message })
       setBotAction('error')
     }
+  }
+
+  const BotStatusBadge = ({ data }) => {
+    if (!data) return null
+    if (data.action === 'bot-status') {
+      const { etat, detail } = data
+      const cfg = {
+        'OK':       { cls: 'badge-vert',   icon: '✅', label: 'Fonctionne bien' },
+        'Problème': { cls: 'badge-orange', icon: '⚠️', label: `Problème : ${detail}` },
+        'KO':       { cls: 'badge-rouge',  icon: '❌', label: `KO — ${detail}` },
+      }[etat] ?? { cls: 'badge-rouge', icon: '❌', label: 'KO' }
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+          <span className={`badge ${cfg.cls}`}>{cfg.icon} {cfg.label}</span>
+          {etat === 'OK' && <span style={{ fontSize: 12, color: 'var(--texte-soft)' }}>{detail}</span>}
+        </div>
+      )
+    }
+    if (data.action === 'bot-restart') {
+      return <div style={{ marginTop: 12, color: 'var(--or-pale)', fontSize: 13 }}>🔄 {data.message ?? 'Redémarré'}</div>
+    }
+    if (data.logs) {
+      return (
+        <pre style={{
+          background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: 14, marginTop: 12,
+          fontSize: 11, color: 'var(--texte)', overflowX: 'auto',
+          whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto',
+        }}>{data.logs}</pre>
+      )
+    }
+    if (data.error) {
+      return <div style={{ marginTop: 12, color: '#e05555', fontSize: 13 }}>❌ {data.error}</div>
+    }
+    return null
   }
 
   // ── Consommables ───────────────────────────────────────────────────────────
@@ -223,16 +257,7 @@ export default function Administration() {
             📋 Derniers logs
           </button>
         </div>
-        {botOutput && (
-          <pre style={{
-            background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: 14,
-            fontSize: 11, color: botAction === 'error' ? '#e05555' : 'var(--texte)',
-            overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 240, overflowY: 'auto',
-            marginTop: 12
-          }}>
-            {botOutput}
-          </pre>
-        )}
+        <BotStatusBadge data={botOutput} />
       </div>
 
       {/* ── Consommables ────────────────────────────────────────────────────── */}
