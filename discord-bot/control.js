@@ -32,7 +32,17 @@ const ACTIONS = {
     return { message: 'Bot redémarré' }
   },
   'bot-status': () => getBotStatus(),
-  'bot-logs':   () => ({ logs: execSync('pm2 logs sdm-bot --lines 20 --nostream').toString() }),
+  'bot-logs': () => {
+    const raw = execSync('pm2 logs sdm-bot --lines 20 --nostream').toString()
+    const logs = raw
+      .replace(/\[[0-9;]*m/g, '')         // supprime les codes couleur ANSI
+      .split('\n')
+      .filter(l => l.includes('sdm-bot'))        // garde uniquement les lignes du bot
+      .map(l => l.replace(/^.*sdm-bot\s*\|\s*/, '').trim()) // retire le préfixe PM2
+      .filter(Boolean)
+      .join('\n')
+    return { logs: logs || '(aucun log)' }
+  },
 }
 
 http.createServer((req, res) => {
