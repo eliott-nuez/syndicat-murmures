@@ -16,6 +16,28 @@ export default function Administration() {
   const [editMdp, setEditMdp]  = useState({})
   const [newMdp, setNewMdp]    = useState({})
 
+  // ── Bot Control ────────────────────────────────────────────────────────────
+  const [botAction, setBotAction]   = useState(null) // null | 'loading' | 'done' | 'error'
+  const [botOutput, setBotOutput]   = useState('')
+
+  const botControl = async (action) => {
+    const me = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+    setBotAction('loading'); setBotOutput('')
+    try {
+      const res = await fetch('/api/bot-control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, membre_id: me.id }),
+      })
+      const data = await res.json()
+      setBotOutput(data.output || data.error || JSON.stringify(data))
+      setBotAction(res.ok ? 'done' : 'error')
+    } catch (err) {
+      setBotOutput(err.message)
+      setBotAction('error')
+    }
+  }
+
   // ── Consommables ───────────────────────────────────────────────────────────
   const [consommables, setConsommables]     = useState([])
   const [showFormConso, setShowFormConso]   = useState(false)
@@ -187,6 +209,32 @@ export default function Administration() {
       </div>
 
       {msg.text && <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`}>{msg.text}</div>}
+
+      {/* ── Bot Control ── */}
+      <div className="card">
+        <div className="card-title">Contrôle du bot Discord</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: botOutput ? 16 : 0 }}>
+          <button className="btn btn-solid" disabled={botAction === 'loading'} onClick={() => botControl('bot-restart')}>
+            {botAction === 'loading' ? '⏳ En cours...' : '🔄 Redémarrer le bot'}
+          </button>
+          <button className="btn btn-or" disabled={botAction === 'loading'} onClick={() => botControl('bot-status')}>
+            📊 Statut
+          </button>
+          <button className="btn btn-or" disabled={botAction === 'loading'} onClick={() => botControl('bot-logs')}>
+            📋 Derniers logs
+          </button>
+        </div>
+        {botOutput && (
+          <pre style={{
+            background: 'rgba(0,0,0,0.4)', borderRadius: 8, padding: 14,
+            fontSize: 11, color: botAction === 'error' ? '#e05555' : 'var(--texte)',
+            overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 240, overflowY: 'auto',
+            marginTop: 12
+          }}>
+            {botOutput}
+          </pre>
+        )}
+      </div>
 
       {/* ── Consommables ────────────────────────────────────────────────────── */}
       <div className="card">
