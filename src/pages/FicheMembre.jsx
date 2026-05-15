@@ -446,10 +446,27 @@ export default function FicheMembre() {
               <div style={{
                 display: 'flex', justifyContent: 'space-between',
                 fontSize: 16, fontFamily: 'var(--font-corps)',
-                padding: '12px 0 0', borderTop: '1px solid var(--or-border)',
+                padding: '12px 0 8px', borderTop: '1px solid var(--or-border)',
               }}>
                 <span style={{ color: 'var(--or)' }}>Total NET</span>
                 <span style={{ color: 'var(--or-pale)', fontWeight: 700 }}>{fmt(net)}</span>
+              </div>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                background: 'rgba(201,168,76,0.07)', border: '1px solid var(--or-border)',
+                borderRadius: 6, padding: '10px 14px',
+              }}>
+                <div>
+                  <div style={{ color: 'var(--or)', fontFamily: 'var(--font-titre)', fontSize: 12, letterSpacing: '0.1em' }}>
+                    Salaire propre
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--texte-soft)', marginTop: 2 }}>
+                    Après blanchiment (−35%)
+                  </div>
+                </div>
+                <span style={{ color: 'var(--or-pale)', fontWeight: 700, fontSize: 18, fontFamily: 'var(--font-corps)' }}>
+                  {fmt(net * 0.65)}
+                </span>
               </div>
             </div>
           </div>
