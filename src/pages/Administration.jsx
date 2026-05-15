@@ -108,6 +108,21 @@ export default function Administration() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setSaving(true); setMsg({ type: '', text: '' })
+
+    // 1. Créer l'utilisateur dans Supabase Auth (via serverless avec service role)
+    const authRes = await fetch('/api/create-membre', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ surnom: form.surnom, password: form.mot_de_passe }),
+    })
+    const authData = await authRes.json()
+    if (!authRes.ok) {
+      setSaving(false)
+      setMsg({ type: 'error', text: `Erreur Auth : ${authData.error}` })
+      return
+    }
+
+    // 2. Insérer dans la table membres
     const { error } = await supabase.from('membres').insert({
       surnom: form.surnom, nom: form.nom || null, prenom: form.prenom || null,
       mot_de_passe: form.mot_de_passe, rang: form.rang, actif: form.actif,
