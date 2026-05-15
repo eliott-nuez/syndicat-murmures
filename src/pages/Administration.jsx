@@ -71,13 +71,6 @@ export default function Administration() {
     return null
   }
 
-  // ── Consommables ───────────────────────────────────────────────────────────
-  const [consommables, setConsommables]     = useState([])
-  const [showFormConso, setShowFormConso]   = useState(false)
-  const [formConso, setFormConso]           = useState({ nom: '', description: '', cout: '', type_argent: 'argent_propre', type_activite: '', actif: true })
-  const [savingConso, setSavingConso]       = useState(false)
-  const [msgConso, setMsgConso]             = useState({ type: '', text: '' })
-
   // ── Commission ─────────────────────────────────────────────────────────────
   const [tranches, setTranches]             = useState([])
   const [multis, setMultis]                 = useState({ membre: 3, responsable: 2, direction: 1 })
@@ -88,7 +81,6 @@ export default function Administration() {
 
   useEffect(() => {
     fetchMembres()
-    fetchConsommables()
     fetchCommission()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -98,11 +90,6 @@ export default function Administration() {
     const { data } = await supabase.from('membres').select('id, surnom, nom, prenom, rang, actif, created_at').order('surnom')
     setMembres(data || [])
     setLoading(false)
-  }
-
-  const fetchConsommables = async () => {
-    const { data } = await supabase.from('consommables').select('*').order('nom')
-    setConsommables(data || [])
   }
 
   const fetchCommission = async () => {
@@ -158,37 +145,6 @@ export default function Administration() {
   const handleToggleActif = async (id, actif) => {
     await supabase.from('membres').update({ actif: !actif }).eq('id', id)
     fetchMembres()
-  }
-
-  // ── Consommables handlers ───────────────────────────────────────────────────
-  const handleCreateConso = async (e) => {
-    e.preventDefault()
-    setSavingConso(true); setMsgConso({ type: '', text: '' })
-    const { error } = await supabase.from('consommables').insert({
-      nom: formConso.nom,
-      description: formConso.description || null,
-      cout: parseFloat(formConso.cout) || 0,
-      type_argent: formConso.type_argent,
-      type_activite: formConso.type_activite || null,
-      actif: formConso.actif,
-    })
-    setSavingConso(false)
-    if (error) { setMsgConso({ type: 'error', text: error.message }); return }
-    setMsgConso({ type: 'success', text: 'Consommable créé.' })
-    setShowFormConso(false)
-    setFormConso({ nom: '', description: '', cout: '', type_argent: 'argent_propre', type_activite: '', actif: true })
-    fetchConsommables()
-  }
-
-  const handleToggleConso = async (id, actif) => {
-    await supabase.from('consommables').update({ actif: !actif }).eq('id', id)
-    fetchConsommables()
-  }
-
-  const handleDeleteConso = async (id) => {
-    if (!window.confirm('Supprimer ce consommable ?')) return
-    await supabase.from('consommables').delete().eq('id', id)
-    fetchConsommables()
   }
 
   // ── Commission handlers ─────────────────────────────────────────────────────
@@ -261,91 +217,6 @@ export default function Administration() {
           </button>
         </div>
         <BotStatusBadge data={botOutput} />
-      </div>
-
-      {/* ── Consommables ────────────────────────────────────────────────────── */}
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div className="card-title" style={{ marginBottom: 0 }}>Consommables</div>
-          <button className="btn btn-or btn-sm" onClick={() => setShowFormConso(!showFormConso)}>
-            {showFormConso ? '✕ Annuler' : '+ Ajouter'}
-          </button>
-        </div>
-        {msgConso.text && <div className={`alert alert-${msgConso.type === 'error' ? 'error' : 'success'}`} style={{ marginBottom: 12 }}>{msgConso.text}</div>}
-
-        {showFormConso && (
-          <form onSubmit={handleCreateConso} style={{ background: 'var(--noir)', borderRadius: 6, padding: 16, marginBottom: 16, border: '1px solid var(--or-border)' }}>
-            <div className="grid-3" style={{ gap: 12, marginBottom: 12 }}>
-              <div className="form-group">
-                <label className="form-label">Nom *</label>
-                <input className="form-input" required value={formConso.nom} onChange={e => setFormConso({ ...formConso, nom: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Coût ($) *</label>
-                <input className="form-input" type="number" min="0" required value={formConso.cout} onChange={e => setFormConso({ ...formConso, cout: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Type d'argent</label>
-                <select className="form-select" value={formConso.type_argent} onChange={e => setFormConso({ ...formConso, type_argent: e.target.value })}>
-                  <option value="argent_propre">Argent propre</option>
-                  <option value="argent_sale">Argent sale</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Activité associée</label>
-                <select className="form-select" value={formConso.type_activite} onChange={e => setFormConso({ ...formConso, type_activite: e.target.value })}>
-                  <option value="">— Général —</option>
-                  {TYPES_ACTIVITE.filter(Boolean).map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Description</label>
-                <input className="form-input" value={formConso.description} onChange={e => setFormConso({ ...formConso, description: e.target.value })} placeholder="Optionnel" />
-              </div>
-              <div className="form-group" style={{ justifyContent: 'flex-end' }}>
-                <label className="form-label">Actif</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8 }}>
-                  <input type="checkbox" checked={formConso.actif} onChange={e => setFormConso({ ...formConso, actif: e.target.checked })} style={{ accentColor: 'var(--or)', width: 16, height: 16 }} />
-                  <span style={{ fontSize: 12, color: 'var(--texte)' }}>Disponible</span>
-                </div>
-              </div>
-            </div>
-            <button type="submit" className="btn btn-solid" disabled={savingConso}>{savingConso ? 'Création...' : 'Créer'}</button>
-          </form>
-        )}
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr><th>Nom</th><th>Coût</th><th>Type argent</th><th>Activité</th><th>Statut</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              {consommables.map(c => (
-                <tr key={c.id}>
-                  <td style={{ fontWeight: 500 }}>{c.nom}{c.description && <span style={{ fontSize: 11, color: 'var(--texte-soft)', marginLeft: 8 }}>{c.description}</span>}</td>
-                  <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(c.cout)}</td>
-                  <td>
-                    <span className={`badge ${c.type_argent === 'argent_sale' ? 'badge-rouge' : 'badge-bleu'}`}>
-                      {c.type_argent === 'argent_sale' ? 'Sale' : 'Propre'}
-                    </span>
-                  </td>
-                  <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{c.type_activite || '—'}</td>
-                  <td>
-                    <button onClick={() => handleToggleConso(c.id, c.actif)}
-                      className={`badge ${c.actif ? 'badge-vert' : 'badge-rouge'}`}
-                      style={{ cursor: 'pointer', border: 'none', fontFamily: 'var(--font-ui)' }}>
-                      {c.actif ? 'Actif' : 'Inactif'}
-                    </button>
-                  </td>
-                  <td>
-                    <button className="btn btn-danger btn-sm" onClick={() => handleDeleteConso(c.id)}>Supprimer</button>
-                  </td>
-                </tr>
-              ))}
-              {consommables.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--texte-soft)', textAlign: 'center' }}>Aucun consommable</td></tr>}
-            </tbody>
-          </table>
-        </div>
       </div>
 
       {/* ── Système de commission ────────────────────────────────────────────── */}
