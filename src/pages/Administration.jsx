@@ -21,13 +21,12 @@ export default function Administration() {
   const [botOutput, setBotOutput]   = useState('')
 
   const botControl = async (action) => {
-    const me = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
     setBotAction('loading'); setBotOutput('')
     try {
       const res = await fetch('/api/bot-control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, membre_id: me.id }),
+        body: JSON.stringify({ action }),
       })
       const data = await res.json()
       setBotOutput(data.output || data.error || JSON.stringify(data))
