@@ -53,8 +53,8 @@ export default function Administration() {
         </div>
       )
     }
-    if (data.action === 'bot-restart') {
-      return <div style={{ marginTop: 12, color: 'var(--or-pale)', fontSize: 13 }}>🔄 {data.message ?? 'Redémarré'}</div>
+    if (data.action === 'bot-restart' || data.action === 'bot-reset-status') {
+      return <div style={{ marginTop: 12, color: 'var(--or-pale)', fontSize: 13 }}>✔ {data.message}</div>
     }
     if (data.logs) {
       return (
@@ -252,6 +252,9 @@ export default function Administration() {
           </button>
           <button className="btn btn-or" disabled={botAction === 'loading'} onClick={() => botControl('bot-status')}>
             📊 Statut
+          </button>
+          <button className="btn btn-or" disabled={botAction === 'loading'} onClick={() => botControl('bot-reset-status')}>
+            🔁 Reset statut
           </button>
           <button className="btn btn-or" disabled={botAction === 'loading'} onClick={() => botControl('bot-logs')}>
             📋 Derniers logs

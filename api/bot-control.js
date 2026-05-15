@@ -2,7 +2,7 @@
 // Relaie les commandes vers le serveur de contrôle du VPS
 // Sécurité : CONTROL_TOKEN secret côté serveur, jamais exposé au client
 
-const ALLOWED_ACTIONS = ['bot-restart', 'bot-status', 'bot-logs']
+const ALLOWED_ACTIONS = ['bot-restart', 'bot-status', 'bot-reset-status', 'bot-logs']
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée' })
