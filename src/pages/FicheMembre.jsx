@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 
+const viewer = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+
 const COOLDOWNS_H = {
   'ATM':         3,
   'Supérette':   2,
@@ -61,9 +63,10 @@ export default function FicheMembre() {
   const fetchPlantations = async () => {
     const { data } = await supabase
       .from('plantations')
-      .select('benefice')
+      .select('id, date_plantation, nb_pots, nb_branches, benefice')
       .eq('membre_id', membreId)
       .gte('date_plantation', getDebutSemaineStr())
+      .order('date_plantation', { ascending: false })
     setPlantations(data || [])
   }
 
@@ -144,6 +147,27 @@ export default function FicheMembre() {
       setLignesVente([emptyLigne()])
       fetchVentes()
     }
+  }
+
+  const handleDeleteActivite = async (id) => {
+    if (!window.confirm('Supprimer cette activité ?')) return
+    const { error } = await supabase.from('activites').delete().eq('id', id)
+    if (error) setMsg({ type: 'error', text: 'Erreur : ' + error.message })
+    else { setMsg({ type: 'success', text: 'Activité supprimée.' }); fetchActivites() }
+  }
+
+  const handleDeleteVente = async (id) => {
+    if (!window.confirm('Supprimer cette vente ?')) return
+    const { error } = await supabase.from('ventes_drogue').delete().eq('id', id)
+    if (error) setMsg({ type: 'error', text: 'Erreur : ' + error.message })
+    else { setMsg({ type: 'success', text: 'Vente supprimée.' }); fetchVentes() }
+  }
+
+  const handleDeletePlantation = async (id) => {
+    if (!window.confirm('Supprimer cette plantation ?')) return
+    const { error } = await supabase.from('plantations').delete().eq('id', id)
+    if (error) setMsg({ type: 'error', text: 'Erreur : ' + error.message })
+    else { setMsg({ type: 'success', text: 'Plantation supprimée.' }); fetchPlantations() }
   }
 
   const updateLigne = (id, field, value) => {
@@ -273,7 +297,7 @@ export default function FicheMembre() {
                 </div>
                 <div className="table-wrap">
                   <table>
-                    <thead><tr><th>Type</th><th>Heure</th><th>Prochaine dispo</th><th>Somme</th><th>Note</th></tr></thead>
+                    <thead><tr><th>Type</th><th>Heure</th><th>Prochaine dispo</th><th>Somme</th><th>Note</th>{viewer.rang === 'direction' && <th></th>}</tr></thead>
                     <tbody>
                       {activites.map(a => (
                         <tr key={a.id}>
@@ -282,6 +306,9 @@ export default function FicheMembre() {
                           <td>{fmtDate(a.prochain_dispo)}</td>
                           <td style={{ color: 'var(--or-pale)' }}>{fmt(a.somme_argent_sale)}</td>
                           <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{a.note || '—'}</td>
+                          {viewer.rang === 'direction' && (
+                            <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteActivite(a.id)}>✕</button></td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -363,7 +390,7 @@ export default function FicheMembre() {
                 </div>
                 <div className="table-wrap">
                   <table>
-                    <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Bénéfice</th><th>Statut</th><th>Date</th></tr></thead>
+                    <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Bénéfice</th><th>Statut</th><th>Date</th>{viewer.rang === 'direction' && <th></th>}</tr></thead>
                     <tbody>
                       {ventes.map(v => (
                         <tr key={v.id}>
@@ -377,6 +404,9 @@ export default function FicheMembre() {
                           </td>
                           <td><span className={`badge ${v.statut === 'Saisie' ? 'badge-rouge' : 'badge-vert'}`}>{v.statut}</span></td>
                           <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(v.created_at)}</td>
+                          {viewer.rang === 'direction' && (
+                            <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteVente(v.id)}>✕</button></td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -385,6 +415,43 @@ export default function FicheMembre() {
               </div>
             )}
           </div>
+
+          {/* Plantations */}
+          {plantations.length > 0 && (
+            <div className="card">
+              <div className="card-title">Plantations cette semaine — {membre.surnom}</div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th><th>Pots</th><th>Branches</th><th>Moy/Pot</th><th>Bénéfice</th>
+                      {viewer.rang === 'direction' && <th></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plantations.map(p => {
+                      const moy = p.nb_pots > 0 ? Math.round(p.nb_branches / p.nb_pots) : 0
+                      const couleur = moy >= 8 ? '#4caf7d' : moy === 7 ? '#e8a84c' : '#e05555'
+                      return (
+                        <tr key={p.id}>
+                          <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                            {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                          </td>
+                          <td>{p.nb_pots}</td>
+                          <td>{p.nb_branches}</td>
+                          <td style={{ color: couleur, fontWeight: 600 }}>{moy}</td>
+                          <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(p.benefice)}</td>
+                          {viewer.rang === 'direction' && (
+                            <td><button className="btn btn-danger btn-sm" onClick={() => handleDeletePlantation(p.id)}>✕</button></td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Récap */}
           <div className="card">
