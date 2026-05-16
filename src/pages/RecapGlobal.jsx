@@ -169,10 +169,10 @@ export default function RecapGlobal() {
       {/* ── En-tête ── */}
       <div className="no-print">
         <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.25em', color: 'var(--or-sombre)', marginBottom: 6 }}>
-          Vue globale
+          Finances
         </div>
         <h1 style={{ fontFamily: 'var(--font-titre)', fontSize: 24, color: 'var(--or-pale)', letterSpacing: '0.05em' }}>
-          Récap semaine — Tous les membres
+          Comptabilité
         </h1>
       </div>
 

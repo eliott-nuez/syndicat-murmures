@@ -13,7 +13,6 @@ import Blanchiment    from './pages/Blanchiment'
 import Administration from './pages/Administration'
 import FicheMembre    from './pages/FicheMembre'
 import Calendrier     from './pages/Calendrier'
-import Comptabilite   from './pages/Comptabilite'
 import VentesGroupe   from './pages/VentesGroupe'
 import Layout         from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -67,10 +66,6 @@ export default function App() {
         <Route path="/fiche-membre" element={
           <AppLayout roles={['direction']}><FicheMembre /></AppLayout>
         } />
-        <Route path="/comptabilite" element={
-          <AppLayout roles={['direction']}><Comptabilite /></AppLayout>
-        } />
-
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

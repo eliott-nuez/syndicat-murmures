@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 const CATEGORIES = ['Véhicule', 'Entrepôt', 'Matériel', 'Plantation', 'Autre']
@@ -11,6 +11,7 @@ export default function Tricount() {
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]             = useState(false)
   const [msg, setMsg]                   = useState('')
+  const [histSort, setHistSort]         = useState({ key: 'date_depense', dir: 'desc' })
 
   const [form, setForm] = useState({
     payeur_id:     '',
@@ -177,6 +178,31 @@ export default function Tricount() {
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+
+  const handleHistSort = (key) => {
+    setHistSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date_depense' ? 'desc' : 'asc' })
+  }
+
+  const sortedDepenses = useMemo(() => {
+    return [...depenses].sort((a, b) => {
+      let va, vb
+      switch (histSort.key) {
+        case 'payeur':
+          va = a.membres?.surnom || ''; vb = b.membres?.surnom || ''; break
+        case 'categorie':
+          va = a.categorie || ''; vb = b.categorie || ''; break
+        case 'description':
+          va = a.description || ''; vb = b.description || ''; break
+        case 'montant_total':
+          va = a.montant_total || 0; vb = b.montant_total || 0; break
+        case 'date_depense':
+        default:
+          va = a.date_depense || ''; vb = b.date_depense || ''; break
+      }
+      if (typeof va === 'number') return histSort.dir === 'asc' ? va - vb : vb - va
+      return histSort.dir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
+    })
+  }, [depenses, histSort])
 
   const balances       = computeBalances()
   const transactions   = computeTransactions(JSON.parse(JSON.stringify(balances)))
@@ -389,53 +415,99 @@ export default function Tricount() {
         <div className="card-title">Historique des dépenses</div>
         {depenses.length === 0 ? (
           <p style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Aucune dépense enregistrée.</p>
-        ) : depenses.map(d => {
-          const isRemb = d.categorie === 'Remboursement'
-          return (
-            <div key={d.id} style={{
-              padding: '16px 0',
-              borderBottom: '1px solid rgba(201,168,76,0.07)',
-              opacity: isRemb ? 0.75 : 1,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div>
-                  <span style={{ fontWeight: 600, fontSize: 14, color: isRemb ? '#5cba8a' : 'var(--texte)' }}>
-                    {isRemb ? '↩ ' : ''}{d.description || d.categorie}
-                  </span>
-                  <span style={{ marginLeft: 10, fontSize: 11, color: 'var(--texte-soft)' }}>
-                    {d.categorie} · Payé par <strong style={{ color: isRemb ? '#5cba8a' : 'var(--or)' }}>{d.membres?.surnom}</strong> · {new Date(d.date_depense).toLocaleDateString('fr-FR')}
-                  </span>
-                </div>
-                <span style={{ fontFamily: 'var(--font-corps)', fontSize: 18, color: isRemb ? '#5cba8a' : 'var(--or-pale)', fontWeight: 600 }}>
-                  {isRemb ? '↩ ' : ''}{fmt(d.montant_total)}
-                </span>
-              </div>
-              {!isRemb && d.depense_participants?.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {d.depense_participants.map(p => (
-                    <div key={p.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 6, padding: '4px 12px',
-                      background: p.rembourse ? 'rgba(42,110,74,0.1)' : 'rgba(139,26,26,0.1)',
-                      border: `1px solid ${p.rembourse ? 'rgba(42,110,74,0.3)' : 'rgba(139,26,26,0.3)'}`,
-                      borderRadius: 20, fontSize: 12,
-                    }}>
-                      <span style={{ color: p.rembourse ? '#5cba8a' : '#e05555' }}>
-                        {p.membres?.surnom} — {fmt(p.part_due)}
-                      </span>
-                      {!p.rembourse && (
-                        <button type="button"
-                          onClick={() => marquerRembourse(p.id)}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5cba8a', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
-                          title="Marquer remboursé">✓</button>
-                      )}
-                      {p.rembourse && <span style={{ color: '#5cba8a', fontSize: 11 }}>✓</span>}
-                    </div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {[
+                    { label: 'Date',        key: 'date_depense'  },
+                    { label: 'Payeur',      key: 'payeur'        },
+                    { label: 'Catégorie',   key: 'categorie'     },
+                    { label: 'Description', key: 'description'   },
+                    { label: 'Montant',     key: 'montant_total' },
+                    { label: 'Participants / statut', key: null  },
+                  ].map(col => (
+                    <th
+                      key={col.label}
+                      onClick={col.key ? () => handleHistSort(col.key) : undefined}
+                      style={{ cursor: col.key ? 'pointer' : 'default', userSelect: 'none' }}
+                    >
+                      {col.label}
+                      {col.key && histSort.key === col.key ? (histSort.dir === 'asc' ? ' ↑' : ' ↓') : ''}
+                    </th>
                   ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+                </tr>
+              </thead>
+              <tbody>
+                {sortedDepenses.map(d => {
+                  const isRemb = d.categorie === 'Remboursement'
+                  return (
+                    <tr key={d.id} style={{ opacity: isRemb ? 0.8 : 1 }}>
+                      <td style={{ color: 'var(--texte-soft)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                        {new Date(d.date_depense).toLocaleDateString('fr-FR')}
+                      </td>
+                      <td style={{ fontWeight: 600, color: isRemb ? '#5cba8a' : 'var(--or)' }}>
+                        {d.membres?.surnom || '—'}
+                      </td>
+                      <td>
+                        <span style={{
+                          fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase',
+                          padding: '2px 7px', borderRadius: 3,
+                          background: isRemb ? 'rgba(92,186,138,0.1)' : 'rgba(201,168,76,0.08)',
+                          border: `1px solid ${isRemb ? 'rgba(92,186,138,0.25)' : 'var(--or-border)'}`,
+                          color: isRemb ? '#5cba8a' : 'var(--texte-soft)',
+                        }}>
+                          {isRemb ? '↩ Remb.' : d.categorie}
+                        </span>
+                      </td>
+                      <td style={{ color: isRemb ? '#5cba8a' : 'var(--texte)' }}>
+                        {d.description || '—'}
+                      </td>
+                      <td style={{
+                        fontFamily: 'var(--font-corps)', fontWeight: 700, fontSize: 15,
+                        color: isRemb ? '#5cba8a' : 'var(--or-pale)', whiteSpace: 'nowrap',
+                      }}>
+                        {isRemb ? '↩ ' : ''}{fmt(d.montant_total)}
+                      </td>
+                      <td>
+                        {isRemb ? (
+                          <span style={{ fontSize: 12, color: '#5cba8a' }}>Remboursement enregistré</span>
+                        ) : d.depense_participants?.length > 0 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {d.depense_participants.map(p => (
+                              <div key={p.id} style={{
+                                display: 'flex', alignItems: 'center', gap: 5,
+                                padding: '3px 10px', borderRadius: 20, fontSize: 12,
+                                background: p.rembourse ? 'rgba(42,110,74,0.1)' : 'rgba(139,26,26,0.1)',
+                                border: `1px solid ${p.rembourse ? 'rgba(42,110,74,0.3)' : 'rgba(139,26,26,0.3)'}`,
+                              }}>
+                                <span style={{ color: p.rembourse ? '#5cba8a' : '#e05555' }}>
+                                  {p.membres?.surnom} — {fmt(p.part_due)}
+                                </span>
+                                {p.rembourse
+                                  ? <span style={{ color: '#5cba8a', fontSize: 11 }}>✓</span>
+                                  : (
+                                    <button type="button"
+                                      onClick={() => marquerRembourse(p.id)}
+                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5cba8a', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
+                                      title="Marquer remboursé">✓</button>
+                                  )
+                                }
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
