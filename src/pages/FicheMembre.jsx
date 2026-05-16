@@ -390,14 +390,20 @@ export default function FicheMembre() {
                 </div>
                 <div className="table-wrap">
                   <table>
-                    <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Bénéfice</th><th>Statut</th><th>Date</th>{viewer.rang === 'direction' && <th></th>}</tr></thead>
+                    <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Prix/unité</th><th>Bénéfice</th><th>Statut</th><th>Date</th>{viewer.rang === 'direction' && <th></th>}</tr></thead>
                     <tbody>
-                      {ventes.map(v => (
+                      {ventes.map(v => {
+                        const prixUnit = v.statut !== 'Saisie' && v.quantite > 0 && v.prix_total > 0
+                          ? Math.round(v.prix_total / v.quantite) : null
+                        return (
                         <tr key={v.id}>
                           <td>{v.drogues?.nom || '—'}</td>
                           <td>{v.quantite}</td>
                           <td style={{ color: 'var(--texte-soft)' }}>
                             {v.statut === 'Saisie' ? '—' : fmt(v.prix_total || 0)}
+                          </td>
+                          <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                            {prixUnit !== null ? fmt(prixUnit) : '—'}
                           </td>
                           <td style={{ color: v.statut === 'Saisie' ? '#e05555' : 'var(--or-pale)' }}>
                             {v.statut === 'Saisie' ? `− ${fmt(Math.abs(v.argent_sale))}` : fmt(v.argent_sale)}
@@ -408,7 +414,8 @@ export default function FicheMembre() {
                             <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteVente(v.id)}>✕</button></td>
                           )}
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
