@@ -228,14 +228,15 @@ tbody tr:last-child td { border-bottom: none; }
   #root > * { display: none !important; }
   #root .print-zone { display: block !important; }
 
-  /* Ré-afficher la zone d'impression et son contexte */
+  /* Ré-afficher le contexte nécessaire */
   #root,
   #root > div,
   #root > div > main { display: block !important; }
 
   .no-print { display: none !important; }
+  .print-footer { display: block !important; }
 
-  /* Forcer les couleurs sombres à l'impression */
+  /* Forcer les couleurs exactes */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -249,30 +250,90 @@ tbody tr:last-child td { border-bottom: none; }
   aside { display: none !important; }
 
   main {
-    padding: 20px !important;
+    padding: 16px 20px !important;
     width: 100% !important;
   }
 
   .print-zone {
     display: block !important;
+    font-size: 11px;
   }
 
+  /* En-tête d'impression */
   .print-header {
-    margin-bottom: 20px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid rgba(201,168,76,0.3);
+    display: block !important;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(201,168,76,0.35);
   }
 
+  /* Stat boxes plus compactes */
+  .stat-box {
+    padding: 8px 10px !important;
+    break-inside: avoid;
+  }
+  .stat-label { font-size: 9px !important; }
+  .stat-value { font-size: 16px !important; }
+
+  /* Cards */
   .card {
     break-inside: avoid;
     page-break-inside: avoid;
+    padding: 10px !important;
+    margin-bottom: 12px !important;
+  }
+  .card-title { font-size: 10px !important; margin-bottom: 8px !important; }
+
+  /* Tableau */
+  .table-wrap { overflow: visible !important; }
+
+  table {
+    width: 100% !important;
+    font-size: 9.5px !important;
+    border-collapse: collapse !important;
   }
 
-  table { font-size: 11px; }
-  thead th { font-size: 9px; padding: 6px 8px; }
-  tbody td { padding: 6px 8px; }
+  thead th {
+    font-size: 8.5px !important;
+    padding: 5px 6px !important;
+    background: rgba(201,168,76,0.08) !important;
+    border-bottom: 1px solid rgba(201,168,76,0.3) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    cursor: default !important;
+    /* Masquer les flèches de tri */
+  }
+
+  tbody td {
+    padding: 5px 6px !important;
+    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+  }
+
+  tfoot td {
+    padding: 6px !important;
+    font-size: 10px !important;
+    border-top: 1px solid rgba(201,168,76,0.3) !important;
+  }
+
+  /* Badge rang */
+  .badge {
+    font-size: 7px !important;
+    padding: 1px 4px !important;
+  }
+
+  /* Note de bas de page */
+  .print-footer {
+    margin-top: 14px;
+    font-size: 9px;
+    color: rgba(201,168,76,0.4) !important;
+    text-align: center;
+    border-top: 1px solid rgba(201,168,76,0.15);
+    padding-top: 6px;
+  }
 }
 
 .print-zone { }
-.print-header { margin-bottom: 20px; }
+.print-header { display: none; margin-bottom: 20px; }
+.print-footer { display: none; }
 .no-print { }

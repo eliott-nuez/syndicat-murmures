@@ -195,6 +195,18 @@ export default function RecapGlobal() {
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
       ) : totaux && (
+        <div className="print-zone">
+
+          {/* ── En-tête visible uniquement à l'impression ── */}
+          <div className="print-header">
+            <div style={{ fontFamily: 'var(--font-titre)', fontSize: 18, color: 'var(--or-pale)', letterSpacing: '0.1em', marginBottom: 3 }}>
+              Syndicat des Murmures
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--texte-soft)' }}>
+              Comptabilité — {semaines[semaineIdx].label}
+            </div>
+          </div>
+
         <>
           {/* ── Stat boxes ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -222,8 +234,8 @@ export default function RecapGlobal() {
                     <SortTh label="Ventes (bénéf.)"    k="totalBenefice" />
                     <SortTh label="Plantations"        k="totalPlantations" />
                     <SortTh label="Commission"         k="commission" />
-                    <SortTh label="Branches récoltées" k="nbBranches" />
-                    <SortTh label="Unités vendues"     k="nbUnites" />
+                    <SortTh label="nb Branches" k="nbBranches" />
+                    <SortTh label="nb Drogues"  k="nbUnites" />
                     <SortTh label="Quota"              k="quotaOk" />
                     <SortTh label="Salaire net"        k="salaireNet" />
                   </tr>
@@ -297,6 +309,11 @@ export default function RecapGlobal() {
             </div>
           </div>
 
+          {/* ── Note de bas de page (impression uniquement) ── */}
+          <div className="print-footer" style={{ marginTop: 20, fontSize: 10, color: 'var(--texte-soft)', textAlign: 'center' }}>
+            Document généré le {new Date().toLocaleString('fr-FR')} · Syndicat des Murmures
+          </div>
+
           {/* ── Historique récoltes ── */}
           {historiquePlants.length > 0 && (
             <div className="card">
@@ -349,6 +366,7 @@ export default function RecapGlobal() {
             </div>
           )}
         </>
+        </div>
       )}
     </div>
   )
