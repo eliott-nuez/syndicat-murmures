@@ -305,7 +305,7 @@ function RecapSemaineMini({ membreId }) {
 
 // ── Zones de vente / Taxes ──────────────────────────────────────────────────
 
-const TYPES_ZONE = ['Vente', 'Récolte', 'Plantation', 'Stockage', 'Autre']
+const TYPES_ZONE = ['Vente', 'Récolte', 'Transformation']
 
 /** Formate un delta en millisecondes → "3j 12h 04m" ou "12h 04m" ou "45m" */
 function fmtDelta(ms) {
@@ -482,14 +482,6 @@ function ZonesTaxes({ isDirection }) {
                       title="Ajoute 7 jours à la validité"
                     >
                       {paying[zone.id] ? '…' : '+ 7j Payer'}
-                    </button>
-                    <button
-                      className="btn btn-or btn-sm"
-                      disabled={paying[zone.id]}
-                      onClick={() => handlePayer(zone, -((6 * 24 * 60 + 23 * 60 + 58) * 60 * 1000))}
-                      title="[TEST] Recule l'expiration de 6j 23h 58m"
-                    >
-                      − 6j 23h 58m
                     </button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(zone.id)} title="Supprimer la zone">✕</button>
                   </div>

@@ -29,6 +29,11 @@ export default function FicheMembre() {
   const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
   const [msg, setMsg]                       = useState({ type: '', text: '' })
 
+  const PRIX_VENTE_BRANCHE_FM = 70
+  const [brancheDrogue, setBrancheDrogue] = useState(null)
+  const [formPlant, setFormPlant]         = useState({ nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' })
+  const [savingPlant, setSavingPlant]     = useState(false)
+
   const [formAct, setFormAct] = useState({
     type_code:         'ATM',
     somme_argent_sale: '',
@@ -48,6 +53,7 @@ export default function FicheMembre() {
     supabase.from('drogues').select('*').order('nom')
       .then(({ data }) => setDrogues(data || []))
     chargerParamsCommission().then(setCommissionParams)
+    supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBrancheDrogue(data))
   }, [])
 
   useEffect(() => {
@@ -168,6 +174,36 @@ export default function FicheMembre() {
     const { error } = await supabase.from('plantations').delete().eq('id', id)
     if (error) setMsg({ type: 'error', text: 'Erreur : ' + error.message })
     else { setMsg({ type: 'success', text: 'Plantation supprimée.' }); fetchPlantations() }
+  }
+
+  const handleSubmitPlantation = async (e) => {
+    e.preventDefault()
+    if (!membreId) return
+    const nb_pots     = parseInt(formPlant.nb_pots) || 0
+    const nb_branches = parseInt(formPlant.nb_branches) || 0
+    if (!nb_pots || !nb_branches) { setMsg({ type: 'error', text: 'Pots et branches obligatoires.' }); return }
+    setSavingPlant(true)
+    let drogueActive = brancheDrogue
+    if (!drogueActive) {
+      const { data } = await supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle()
+      drogueActive = data; if (drogueActive) setBrancheDrogue(drogueActive)
+    }
+    if (!drogueActive) { setMsg({ type: 'error', text: 'Drogue "Branche" introuvable.' }); setSavingPlant(false); return }
+    const beneficeFinal    = nb_branches * (PRIX_VENTE_BRANCHE_FM - drogueActive.prix_revient)
+    const branches_par_pot = nb_pots > 0 ? Math.round(nb_branches / nb_pots) : 0
+    const { error } = await supabase.from('plantations').insert({
+      membre_id: membreId, drogue_id: drogueActive.id,
+      nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal,
+      date_plantation: formPlant.date_plantation.replace('T', ' ') + ':00',
+      note: formPlant.note || null,
+    })
+    setSavingPlant(false)
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }) }
+    else {
+      setMsg({ type: 'success', text: `Récolte enregistrée pour ${membre?.surnom}.` })
+      setFormPlant({ nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' })
+      fetchPlantations()
+    }
   }
 
   const updateLigne = (id, field, value) => {
@@ -459,6 +495,58 @@ export default function FicheMembre() {
               </div>
             </div>
           )}
+
+          {/* Formulaire plantation */}
+          {(() => {
+            const fmNbPots     = parseInt(formPlant.nb_pots) || 0
+            const fmNbBranches = parseInt(formPlant.nb_branches) || 0
+            const fmBpP        = fmNbPots > 0 && fmNbBranches > 0 ? Math.round(fmNbBranches / fmNbPots) : null
+            const fmBenef      = brancheDrogue && fmNbBranches > 0 ? fmNbBranches * (PRIX_VENTE_BRANCHE_FM - brancheDrogue.prix_revient) : null
+            return (
+              <div className="card">
+                <div className="card-title">Enregistrer une récolte — {membre.surnom}</div>
+                <form onSubmit={handleSubmitPlantation}>
+                  <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
+                    <div className="form-group">
+                      <label className="form-label">Pots plantés *</label>
+                      <input className="form-input" type="number" min="1" required placeholder="Ex : 50"
+                        value={formPlant.nb_pots} onChange={e => setFormPlant(f => ({ ...f, nb_pots: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Branches récoltées *</label>
+                      <input className="form-input" type="number" min="1" required placeholder="Ex : 2500"
+                        value={formPlant.nb_branches} onChange={e => setFormPlant(f => ({ ...f, nb_branches: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Branches / pot (auto)</label>
+                      <input className="form-input" type="text" disabled
+                        value={fmBpP !== null ? `${fmBpP} branches / pot` : '—'}
+                        style={{ fontWeight: fmBpP !== null ? 600 : undefined, color: fmBpP === null ? undefined : fmBpP >= 8 ? '#5cba8a' : fmBpP === 7 ? '#e8a84c' : '#e05555' }} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Bénéfice estimé (auto)</label>
+                      <input className="form-input" type="text" disabled
+                        value={fmBenef !== null ? fmt(fmBenef) : '—'}
+                        style={{ fontWeight: 600, color: fmBenef !== null ? (fmBenef >= 0 ? '#5cba8a' : '#e05555') : undefined }} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Date de récolte</label>
+                      <input className="form-input" type="datetime-local"
+                        value={formPlant.date_plantation} onChange={e => setFormPlant(f => ({ ...f, date_plantation: e.target.value }))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Note (facultatif)</label>
+                      <input className="form-input" type="text" placeholder="Lieu, conditions…"
+                        value={formPlant.note} onChange={e => setFormPlant(f => ({ ...f, note: e.target.value }))} />
+                    </div>
+                  </div>
+                  <button type="submit" className="btn btn-solid" disabled={savingPlant}>
+                    {savingPlant ? 'Enregistrement...' : '+ Valider la récolte'}
+                  </button>
+                </form>
+              </div>
+            )
+          })()}
 
           {/* Récap */}
           <div className="card">

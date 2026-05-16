@@ -18,6 +18,8 @@ function localNow() {
 export default function FichePerso() {
   const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
 
+  const PRIX_VENTE_BRANCHE = 70
+
   const [drogues, setDrogues]               = useState([])
   const [activites, setActivites]           = useState([])
   const [ventes, setVentes]                 = useState([])
@@ -25,6 +27,10 @@ export default function FichePerso() {
   const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
   const [msg, setMsg]                       = useState({ type: '', text: '' })
   const [msgMdp, setMsgMdp]                 = useState({ type: '', text: '' })
+  const [branche, setBranche]               = useState(null)
+  const [membresListe, setMembresListe]     = useState([])
+  const [formPlant, setFormPlant]           = useState({ membre_id: membre.id, nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' })
+  const [savingPlant, setSavingPlant]       = useState(false)
 
   // Form activité
   const [formAct, setFormAct] = useState({
@@ -52,6 +58,10 @@ export default function FichePerso() {
     fetchVentesSemaine()
     fetchPlantationsSemaine()
     chargerParamsCommission().then(setCommissionParams)
+    supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBranche(data))
+    if (['responsable','direction'].includes(membre.rang)) {
+      supabase.from('membres').select('id, surnom, rang').order('surnom').then(({ data }) => setMembresListe(data || []))
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPlantationsSemaine = async () => {
@@ -191,6 +201,36 @@ export default function FichePerso() {
       if (last.drogue_id) return [...updated, emptyLigne()]
       return updated
     })
+  }
+
+  const handleSubmitPlantation = async (e) => {
+    e.preventDefault()
+    const nb_pots     = parseInt(formPlant.nb_pots) || 0
+    const nb_branches = parseInt(formPlant.nb_branches) || 0
+    if (!nb_pots || !nb_branches) { setMsg({ type: 'error', text: 'Pots et branches obligatoires.' }); return }
+    setSavingPlant(true)
+    let drogueActive = branche
+    if (!drogueActive) {
+      const { data } = await supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle()
+      drogueActive = data; if (drogueActive) setBranche(drogueActive)
+    }
+    if (!drogueActive) { setMsg({ type: 'error', text: 'Drogue "Branche" introuvable.' }); setSavingPlant(false); return }
+    const beneficeFinal = nb_branches * (PRIX_VENTE_BRANCHE - drogueActive.prix_revient)
+    const branches_par_pot = nb_pots > 0 ? Math.round(nb_branches / nb_pots) : 0
+    const { error } = await supabase.from('plantations').insert({
+      membre_id: formPlant.membre_id || membre.id,
+      drogue_id: drogueActive.id,
+      nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal,
+      date_plantation: formPlant.date_plantation.replace('T', ' ') + ':00',
+      note: formPlant.note || null,
+    })
+    setSavingPlant(false)
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }) }
+    else {
+      setMsg({ type: 'success', text: 'Récolte enregistrée.' })
+      setFormPlant(f => ({ ...f, nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' }))
+      fetchPlantationsSemaine()
+    }
   }
 
   const calc = calculerCommission(activites, ventes, membre.rang, commissionParams, plantations)
@@ -417,6 +457,73 @@ export default function FichePerso() {
           </div>
         )}
       </div>
+
+      {/* ── Récolte cannabis ── */}
+      {(() => {
+        const plantNbPots     = parseInt(formPlant.nb_pots) || 0
+        const plantNbBranches = parseInt(formPlant.nb_branches) || 0
+        const plantBpP        = plantNbPots > 0 && plantNbBranches > 0 ? Math.round(plantNbBranches / plantNbPots) : null
+        const plantBenefice   = branche && plantNbBranches > 0 ? plantNbBranches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : null
+        return (
+          <div className="card">
+            <div className="card-title">Récolte de cannabis</div>
+            {branche && (
+              <div style={{ fontSize: 12, color: 'var(--texte-soft)', marginBottom: 14 }}>
+                Branche : coût revient <span style={{ color: 'var(--or-pale)' }}>{fmt(branche.prix_revient)}/u</span>
+                {' · '}prix vente <span style={{ color: 'var(--or-pale)' }}>{PRIX_VENTE_BRANCHE}$/u</span>
+              </div>
+            )}
+            <form onSubmit={handleSubmitPlantation}>
+              <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
+                {['responsable','direction'].includes(membre.rang) && (
+                  <div className="form-group">
+                    <label className="form-label">Membre</label>
+                    <select className="form-select" value={formPlant.membre_id}
+                      onChange={e => setFormPlant(f => ({ ...f, membre_id: e.target.value }))}>
+                      {membresListe.map(m => <option key={m.id} value={m.id}>{m.surnom} ({m.rang}){m.id === membre.id ? ' — moi' : ''}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">Pots plantés *</label>
+                  <input className="form-input" type="number" min="1" required placeholder="Ex : 50"
+                    value={formPlant.nb_pots} onChange={e => setFormPlant(f => ({ ...f, nb_pots: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branches récoltées *</label>
+                  <input className="form-input" type="number" min="1" required placeholder="Ex : 2500"
+                    value={formPlant.nb_branches} onChange={e => setFormPlant(f => ({ ...f, nb_branches: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branches / pot (auto)</label>
+                  <input className="form-input" type="text" disabled
+                    value={plantBpP !== null ? `${plantBpP} branches / pot` : '—'}
+                    style={{ fontWeight: plantBpP !== null ? 600 : undefined, color: plantBpP === null ? undefined : plantBpP >= 8 ? '#5cba8a' : plantBpP === 7 ? '#e8a84c' : '#e05555' }} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bénéfice estimé (auto)</label>
+                  <input className="form-input" type="text" disabled
+                    value={plantBenefice !== null ? fmt(plantBenefice) : '—'}
+                    style={{ fontWeight: 600, color: plantBenefice !== null ? (plantBenefice >= 0 ? '#5cba8a' : '#e05555') : undefined }} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Date de récolte</label>
+                  <input className="form-input" type="datetime-local"
+                    value={formPlant.date_plantation} onChange={e => setFormPlant(f => ({ ...f, date_plantation: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Note (facultatif)</label>
+                  <input className="form-input" type="text" placeholder="Lieu, conditions…"
+                    value={formPlant.note} onChange={e => setFormPlant(f => ({ ...f, note: e.target.value }))} />
+                </div>
+              </div>
+              <button type="submit" className="btn btn-solid" disabled={savingPlant}>
+                {savingPlant ? 'Enregistrement...' : '+ Valider la récolte'}
+              </button>
+            </form>
+          </div>
+        )
+      })()}
 
       {/* ── Récap semaine ── */}
       <div className="card">

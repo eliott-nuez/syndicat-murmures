@@ -4,10 +4,11 @@ import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 
 export default function RecapGlobal() {
-  const [recaps, setRecaps]         = useState([])
-  const [sortKey, setSortKey]       = useState('net')
-  const [sortDir, setSortDir]       = useState('desc')
-  const [loading, setLoading]       = useState(true)
+  const [recaps, setRecaps]             = useState([])
+  const [sortKey, setSortKey]           = useState('net')
+  const [sortDir, setSortDir]           = useState('desc')
+  const [loading, setLoading]           = useState(true)
+  const [historiquePlants, setHistoriquePlants] = useState([])
 
   useEffect(() => {
     fetchAll()
@@ -23,7 +24,7 @@ export default function RecapGlobal() {
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
       supabase.from('activites').select('membre_id, somme_argent_sale, type_code').gte('heure_faite', debutStr),
       supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id').gte('created_at', debutUTC.toISOString()),
-      supabase.from('plantations').select('membre_id, benefice').gte('date_plantation', debutStr),
+      supabase.from('plantations').select('membre_id, benefice, nb_branches').gte('date_plantation', debutStr),
     ])
 
     const result = (membresData || []).map(m => {
@@ -32,6 +33,9 @@ export default function RecapGlobal() {
       const plants = (plantationsData || []).filter(p => p.membre_id === m.id)
       const calc   = calculerCommission(acts, ventes, m.rang, commissionParams, plants)
       const { totalActBrut, cambriolageTotal, totalPrixTotal, totalBenefice, totalPlantations, base, commission_pct, commission, net } = calc
+      const nbBranches = plants.reduce((s, p) => s + (p.nb_branches || 0), 0)
+      const nbUnites   = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.quantite || 0), 0)
+      const quotaOk    = acts.length >= 20 && nbBranches >= 2000 && nbUnites >= 300
 
       return {
         ...m,
@@ -46,10 +50,20 @@ export default function RecapGlobal() {
         commission,
         net,
         nbActivites: acts.length,
+        nbBranches,
+        nbUnites,
+        quotaOk,
       }
     })
 
     setRecaps(result)
+
+    const { data: histPlants } = await supabase.from('plantations')
+      .select('*, membres(surnom)')
+      .gte('date_plantation', debutStr)
+      .order('date_plantation', { ascending: false })
+    setHistoriquePlants(histPlants || [])
+
     setLoading(false)
   }
 
@@ -136,6 +150,9 @@ export default function RecapGlobal() {
                 <SortTh label="Plantations"       k="totalPlantations" />
                 <SortTh label="Base commission"   k="base" />
                 <SortTh label="Commission"        k="commission" />
+                <SortTh label="Branches récoltées" k="nbBranches" />
+                <SortTh label="Unités vendues"     k="nbUnites" />
+                <th>Quota</th>
                 <SortTh label="Total NET"         k="net" />
               </tr>
             </thead>
@@ -156,6 +173,14 @@ export default function RecapGlobal() {
                   <td style={{ color: r.totalPlantations > 0 ? 'var(--or-pale)' : 'var(--texte-soft)' }}>{fmt(r.totalPlantations)}</td>
                   <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(r.base)}</td>
                   <td style={{ color: '#e8a84c' }}>− {fmt(r.commission)} <span style={{ fontSize: 10, opacity: 0.7 }}>({r.commission_pct.toFixed(1)}%)</span></td>
+                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.nbBranches.toLocaleString('fr-FR')}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.nbUnites.toLocaleString('fr-FR')}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <span style={{
+                      display: 'inline-block', width: 12, height: 12, borderRadius: '50%',
+                      background: r.quotaOk ? '#4caf7d' : '#e05555',
+                    }} title={r.quotaOk ? '✓ Quota réalisé (20 actions, 2000 branches, 300 unités)' : '✗ Quota non réalisé'} />
+                  </td>
                   <td style={{ color: 'var(--or)', fontWeight: 600, fontFamily: 'var(--font-corps)', fontSize: 15 }}>
                     {fmt(r.net)}
                   </td>
@@ -174,6 +199,13 @@ export default function RecapGlobal() {
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalPlantations)}</td>
                 <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.base)}</td>
                 <td style={{ color: '#e8a84c', fontWeight: 600 }}>− {fmt(totaux.commission)}</td>
+                <td style={{ textAlign: 'center', color: 'var(--or-pale)', fontWeight: 600 }}>
+                  {recaps.reduce((s,r)=>s+r.nbBranches,0).toLocaleString('fr-FR')}
+                </td>
+                <td style={{ textAlign: 'center', color: 'var(--or-pale)', fontWeight: 600 }}>
+                  {recaps.reduce((s,r)=>s+r.nbUnites,0).toLocaleString('fr-FR')}
+                </td>
+                <td></td>
                 <td style={{ color: 'var(--or)', fontWeight: 700, fontFamily: 'var(--font-corps)', fontSize: 16 }}>
                   {fmt(totaux.net)}
                 </td>
@@ -182,6 +214,42 @@ export default function RecapGlobal() {
           </table>
         </div>
       </div>
+
+      {historiquePlants.length > 0 && (
+        <div className="card">
+          <div className="card-title">Historique des récoltes — semaine en cours</div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th><th>Membre</th>
+                  <th style={{ textAlign: 'center' }}>Pots</th>
+                  <th style={{ textAlign: 'center' }}>Branches</th>
+                  <th style={{ textAlign: 'center' }}>Moy./pot</th>
+                  <th>Bénéfice</th><th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historiquePlants.map(p => (
+                  <tr key={p.id}>
+                    <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                      {new Date(p.date_plantation).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                    </td>
+                    <td style={{ fontWeight: 500 }}>{p.membres?.surnom || '—'}</td>
+                    <td style={{ textAlign: 'center' }}>{(p.nb_pots||0).toLocaleString('fr-FR')}</td>
+                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{(p.nb_branches||0).toLocaleString('fr-FR')}</td>
+                    <td style={{ textAlign: 'center', fontWeight: 600, color: !p.branches_par_pot ? 'var(--texte-soft)' : p.branches_par_pot>=8 ? '#5cba8a' : p.branches_par_pot===7 ? '#e8a84c' : '#e05555' }}>
+                      {p.branches_par_pot || '—'}
+                    </td>
+                    <td style={{ fontWeight: 600, color: (p.benefice||0) >= 0 ? '#5cba8a' : '#e05555' }}>{fmt(p.benefice||0)}</td>
+                    <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{p.note || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -5,17 +5,15 @@ import { useInactivityLogout } from '../hooks/useInactivityLogout'
 const NAV_TOUS = [
   { to: '/dashboard',   label: 'Dashboard',      icon: '◈' },
   { to: '/fiche',       label: 'Ma fiche perso',  icon: '◉' },
-  { to: '/plantation',  label: 'Plantation',      icon: '◇' },
   { to: '/calendrier',  label: 'Calendrier',      icon: '◻' },
 ]
 const NAV_RESPONSABLE = [
   { to: '/recap-global',   label: 'Récap global',    icon: '◎' },
-  { to: '/stock',          label: 'Stock',            icon: '◇' },
+  { to: '/stock',          label: 'Stock & Catalogue', icon: '◇' },
   { to: '/ventes-groupe',  label: 'Ventes groupe',   icon: '◆' },
 ]
 const NAV_DIRECTION = [
   { to: '/fiche-membre',  label: 'Fiche membre',   icon: '◉' },
-  { to: '/drogues',       label: 'Drogues',         icon: '◈' },
   { to: '/tricount',      label: 'Tricount',        icon: '◆' },
   { to: '/blanchiment',   label: 'Blanchiment',     icon: '◈' },
   { to: '/comptabilite',  label: 'Comptabilité',    icon: '◎' },
