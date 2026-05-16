@@ -375,8 +375,8 @@ function ZonesTaxes({ isDirection }) {
   const handleCreate = async (e) => {
     e.preventDefault()
     if (!form.nom.trim()) return
-    // Expiration par défaut : dans 7 jours
-    const exp = new Date(Date.now() + 7 * 24 * 3600 * 1000)
+    // Expiration = maintenant → zone apparaît immédiatement en "Non payé"
+    const exp = new Date()
     const { error } = await supabase.from('zones_taxes').insert({
       nom: form.nom.trim(), type_zone: form.type_zone,
       date_expiration: exp.toISOString(),
@@ -440,7 +440,7 @@ function ZonesTaxes({ isDirection }) {
               {TYPES_ZONE.map(t => <option key={t}>{t}</option>)}
             </select>
           </div>
-          <button type="submit" className="btn btn-solid btn-sm">Créer (7 j)</button>
+          <button type="submit" className="btn btn-solid btn-sm">Créer</button>
         </form>
       )}
 
