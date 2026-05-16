@@ -359,8 +359,8 @@ function ZonesTaxes({ isDirection }) {
 
   const handlePayer = async (zone, dureeMs = 7 * 24 * 3600 * 1000) => {
     setPaying(p => ({ ...p, [zone.id]: true }))
-    // Toujours 7 jours depuis aujourd'hui, quelle que soit l'expiration précédente
-    const nouvelleExp = new Date(Date.now() + dureeMs)
+    // Ajoute 7 jours à la date d'expiration actuelle (même si expirée)
+    const nouvelleExp = new Date(new Date(zone.date_expiration).getTime() + dureeMs)
     const { error } = await supabase
       .from('zones_taxes')
       .update({ date_expiration: nouvelleExp.toISOString() })
