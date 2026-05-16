@@ -426,7 +426,6 @@ export default function Tricount() {
                     { label: 'Catégorie',   key: 'categorie'     },
                     { label: 'Description', key: 'description'   },
                     { label: 'Montant',     key: 'montant_total' },
-                    { label: 'Participants / statut', key: null  },
                   ].map(col => (
                     <th
                       key={col.label}
@@ -469,37 +468,6 @@ export default function Tricount() {
                         color: isRemb ? '#5cba8a' : 'var(--or-pale)', whiteSpace: 'nowrap',
                       }}>
                         {isRemb ? '↩ ' : ''}{fmt(d.montant_total)}
-                      </td>
-                      <td>
-                        {isRemb ? (
-                          <span style={{ fontSize: 12, color: '#5cba8a' }}>Remboursement enregistré</span>
-                        ) : d.depense_participants?.length > 0 ? (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {d.depense_participants.map(p => (
-                              <div key={p.id} style={{
-                                display: 'flex', alignItems: 'center', gap: 5,
-                                padding: '3px 10px', borderRadius: 20, fontSize: 12,
-                                background: p.rembourse ? 'rgba(42,110,74,0.1)' : 'rgba(139,26,26,0.1)',
-                                border: `1px solid ${p.rembourse ? 'rgba(42,110,74,0.3)' : 'rgba(139,26,26,0.3)'}`,
-                              }}>
-                                <span style={{ color: p.rembourse ? '#5cba8a' : '#e05555' }}>
-                                  {p.membres?.surnom} — {fmt(p.part_due)}
-                                </span>
-                                {p.rembourse
-                                  ? <span style={{ color: '#5cba8a', fontSize: 11 }}>✓</span>
-                                  : (
-                                    <button type="button"
-                                      onClick={() => marquerRembourse(p.id)}
-                                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5cba8a', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
-                                      title="Marquer remboursé">✓</button>
-                                  )
-                                }
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>—</span>
-                        )}
                       </td>
                     </tr>
                   )
