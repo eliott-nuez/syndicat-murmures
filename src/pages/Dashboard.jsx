@@ -337,6 +337,8 @@ function ZonesTaxes({ isDirection }) {
   const [msg, setMsg]               = useState('')
   const [form, setForm]             = useState({ nom: '', type_zone: 'Vente' })
   const [, setNow]                  = useState(new Date())   // force re-render chaque minute
+  const [editingMdp, setEditingMdp] = useState(null)  // id de la zone dont on édite le mdp
+  const [mdpInput, setMdpInput]     = useState('')
 
   useEffect(() => {
     fetchZones()
@@ -388,6 +390,21 @@ function ZonesTaxes({ isDirection }) {
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer cette zone ?')) return
     await supabase.from('zones_taxes').update({ actif: false }).eq('id', id)
+    fetchZones()
+  }
+
+  const handleEditMdp = (zone) => {
+    setEditingMdp(zone.id)
+    setMdpInput(zone.mot_de_passe || '')
+  }
+
+  const handleSaveMdp = async (id) => {
+    const { error } = await supabase
+      .from('zones_taxes')
+      .update({ mot_de_passe: mdpInput.trim() || null })
+      .eq('id', id)
+    if (error) { setMsg('Erreur : ' + error.message); return }
+    setEditingMdp(null)
     fetchZones()
   }
 
@@ -459,7 +476,47 @@ function ZonesTaxes({ isDirection }) {
                       border: '1px solid var(--or-border)', borderRadius: 3, padding: '1px 5px',
                     }}>{zone.type_zone}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: statut.color, opacity: 0.9 }}>{label}</div>
+                  <div style={{ fontSize: 11, color: statut.color, opacity: 0.9, marginBottom: 4 }}>{label}</div>
+
+                  {/* Mot de passe */}
+                  {editingMdp === zone.id ? (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 6 }}>
+                      <span style={{ fontSize: 11, color: 'var(--texte-soft)', flexShrink: 0 }}>Mot de passe :</span>
+                      <input
+                        className="form-input"
+                        style={{ fontSize: 12, padding: '3px 8px', height: 'auto', width: 160 }}
+                        value={mdpInput}
+                        onChange={e => setMdpInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleSaveMdp(zone.id); if (e.key === 'Escape') setEditingMdp(null) }}
+                        autoFocus
+                        placeholder="Saisir un mot de passe…"
+                      />
+                      <button className="btn btn-solid btn-sm" onClick={() => handleSaveMdp(zone.id)}>✓</button>
+                      <button className="btn btn-sm" style={{ color: 'var(--texte-soft)' }} onClick={() => setEditingMdp(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <span style={{ fontSize: 11, color: 'var(--texte-soft)' }}>Mot de passe :</span>
+                      <span style={{
+                        fontSize: 12, fontWeight: 600, letterSpacing: '0.05em',
+                        color: zone.mot_de_passe ? 'var(--or-pale)' : 'var(--texte-soft)',
+                        fontFamily: zone.mot_de_passe ? 'var(--font-corps)' : undefined,
+                      }}>
+                        {zone.mot_de_passe || '—'}
+                      </span>
+                      {isDirection && (
+                        <button
+                          onClick={() => handleEditMdp(zone)}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: 11, color: 'var(--texte-soft)', padding: '0 4px',
+                            opacity: 0.7, lineHeight: 1,
+                          }}
+                          title="Modifier le mot de passe"
+                        >✎</button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Badge statut */}
