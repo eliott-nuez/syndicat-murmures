@@ -177,8 +177,6 @@ export default function Tricount() {
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
-
   const handleHistSort = (key) => {
     setHistSort(s => s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'date_depense' ? 'desc' : 'asc' })
   }
@@ -203,6 +201,8 @@ export default function Tricount() {
       return histSort.dir === 'asc' ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va))
     })
   }, [depenses, histSort])
+
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
   const balances       = computeBalances()
   const transactions   = computeTransactions(JSON.parse(JSON.stringify(balances)))
