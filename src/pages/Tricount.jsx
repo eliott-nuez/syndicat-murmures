@@ -167,13 +167,6 @@ export default function Tricount() {
     fetchAll()
   }
 
-  const marquerRembourse = async (participantId) => {
-    await supabase.from('depense_participants')
-      .update({ rembourse: true, rembourse_le: new Date().toISOString() })
-      .eq('id', participantId)
-    fetchAll()
-  }
-
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
