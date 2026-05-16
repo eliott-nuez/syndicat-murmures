@@ -486,10 +486,10 @@ function ZonesTaxes({ isDirection }) {
                     <button
                       className="btn btn-or btn-sm"
                       disabled={paying[zone.id]}
-                      onClick={() => handlePayer(zone, 2 * 60 * 1000)}
-                      title="[TEST] Ajoute 2 minutes"
+                      onClick={() => handlePayer(zone, -((6 * 24 * 60 + 23 * 60 + 58) * 60 * 1000))}
+                      title="[TEST] Recule l'expiration de 6j 23h 58m"
                     >
-                      + 2min
+                      − 6j 23h 58m
                     </button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(zone.id)} title="Supprimer la zone">✕</button>
                   </div>
