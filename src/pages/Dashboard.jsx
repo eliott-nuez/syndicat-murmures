@@ -355,12 +355,12 @@ function ZonesTaxes({ isDirection }) {
     setLoading(false)
   }
 
-  const handlePayer = async (zone) => {
+  const handlePayer = async (zone, dureeMs = 7 * 24 * 3600 * 1000) => {
     setPaying(p => ({ ...p, [zone.id]: true }))
-    // Ajoute 7 jours depuis l'expiration actuelle (ou depuis maintenant si déjà expiré)
+    // Ajoute la durée depuis l'expiration actuelle (ou depuis maintenant si déjà expiré)
     const base   = new Date(zone.date_expiration)
     const depuis = base < new Date() ? new Date() : base
-    const nouvelleExp = new Date(depuis.getTime() + 7 * 24 * 3600 * 1000)
+    const nouvelleExp = new Date(depuis.getTime() + dureeMs)
     const { error } = await supabase
       .from('zones_taxes')
       .update({ date_expiration: nouvelleExp.toISOString() })
@@ -482,6 +482,14 @@ function ZonesTaxes({ isDirection }) {
                       title="Ajoute 7 jours à la validité"
                     >
                       {paying[zone.id] ? '…' : '+ 7j Payer'}
+                    </button>
+                    <button
+                      className="btn btn-or btn-sm"
+                      disabled={paying[zone.id]}
+                      onClick={() => handlePayer(zone, 2 * 60 * 1000)}
+                      title="[TEST] Ajoute 2 minutes"
+                    >
+                      + 2min
                     </button>
                     <button className="btn btn-danger btn-sm" onClick={() => handleDelete(zone.id)} title="Supprimer la zone">✕</button>
                   </div>
