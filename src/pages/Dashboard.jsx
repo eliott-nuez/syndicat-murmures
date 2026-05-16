@@ -163,8 +163,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Disponibilites */}
-      <div className="grid-2">
+      {/* Disponibilites + Recap */}
+      <div className="grid-2" style={{ marginBottom: 28 }}>
         <div className="card">
           <div className="card-title">Disponibilités activités</div>
           {Object.keys(COOLDOWNS).map((type) => {
@@ -197,6 +197,9 @@ export default function Dashboard() {
           <RecapSemaineMini membreId={membre.id} />
         </div>
       </div>
+
+      {/* Zones de vente / taxes */}
+      <ZonesTaxes isDirection={isDirection} />
     </div>
   )
 }
@@ -296,6 +299,198 @@ function RecapSemaineMini({ membreId }) {
           {fmt(net * 0.65)}
         </span>
       </div>
+    </div>
+  )
+}
+
+// ── Zones de vente / Taxes ──────────────────────────────────────────────────
+
+const TYPES_ZONE = ['Vente', 'Récolte', 'Plantation', 'Stockage', 'Autre']
+
+/** Formate un delta en millisecondes → "3j 12h 04m" ou "12h 04m" ou "45m" */
+function fmtDelta(ms) {
+  if (ms <= 0) return null
+  const j = Math.floor(ms / 86400000)
+  const h = Math.floor((ms % 86400000) / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  if (j > 0) return `${j}j ${h}h ${String(m).padStart(2, '0')}m`
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`
+  return `${m}m`
+}
+
+/** Statut d'une zone selon la date d'expiration (UTC → compare à now) */
+function getZoneStatut(dateExpStr) {
+  const exp  = new Date(dateExpStr)
+  const diff = exp - new Date()           // ms restants (négatif = expiré)
+  const jours = diff / 86400000
+
+  if (diff <= 0)   return { code: 'expire',  label: 'Non payé',  color: '#e05555', bg: 'rgba(224,85,85,0.10)', border: 'rgba(224,85,85,0.35)' }
+  if (jours <= 2)  return { code: 'alerte',  label: 'Alerte',    color: '#e8a84c', bg: 'rgba(232,168,76,0.10)', border: 'rgba(232,168,76,0.35)' }
+  return             { code: 'paye',   label: 'Payé',      color: '#4caf7d', bg: 'rgba(76,175,125,0.10)', border: 'rgba(76,175,125,0.35)' }
+}
+
+function ZonesTaxes({ isDirection }) {
+  const [zones, setZones]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [showForm, setShowForm]     = useState(false)
+  const [paying, setPaying]         = useState({})   // { [id]: true } pendant le paiement
+  const [msg, setMsg]               = useState('')
+  const [form, setForm]             = useState({ nom: '', type_zone: 'Vente' })
+  const [, setNow]                  = useState(new Date())   // force re-render chaque minute
+
+  useEffect(() => {
+    fetchZones()
+    const t = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(t)
+  }, [])
+
+  const fetchZones = async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('zones_taxes')
+      .select('*')
+      .eq('actif', true)
+      .order('nom')
+    setZones(data || [])
+    setLoading(false)
+  }
+
+  const handlePayer = async (zone) => {
+    setPaying(p => ({ ...p, [zone.id]: true }))
+    // Ajoute 7 jours depuis l'expiration actuelle (ou depuis maintenant si déjà expiré)
+    const base   = new Date(zone.date_expiration)
+    const depuis = base < new Date() ? new Date() : base
+    const nouvelleExp = new Date(depuis.getTime() + 7 * 24 * 3600 * 1000)
+    const { error } = await supabase
+      .from('zones_taxes')
+      .update({ date_expiration: nouvelleExp.toISOString() })
+      .eq('id', zone.id)
+    if (error) setMsg('Erreur : ' + error.message)
+    else { setMsg(''); fetchZones() }
+    setPaying(p => ({ ...p, [zone.id]: false }))
+  }
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    if (!form.nom.trim()) return
+    // Expiration par défaut : dans 7 jours
+    const exp = new Date(Date.now() + 7 * 24 * 3600 * 1000)
+    const { error } = await supabase.from('zones_taxes').insert({
+      nom: form.nom.trim(), type_zone: form.type_zone,
+      date_expiration: exp.toISOString(),
+    })
+    if (error) { setMsg('Erreur : ' + error.message); return }
+    setForm({ nom: '', type_zone: 'Vente' })
+    setShowForm(false)
+    fetchZones()
+  }
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer cette zone ?')) return
+    await supabase.from('zones_taxes').update({ actif: false }).eq('id', id)
+    fetchZones()
+  }
+
+  return (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div className="card-title" style={{ margin: 0 }}>Taxes des zones</div>
+        {isDirection && (
+          <button className="btn btn-or btn-sm" onClick={() => setShowForm(s => !s)}>
+            {showForm ? '✕ Annuler' : '+ Ajouter une zone'}
+          </button>
+        )}
+      </div>
+
+      {msg && <div className="alert alert-error" style={{ marginBottom: 12 }}>{msg}</div>}
+
+      {/* Formulaire ajout zone (direction uniquement) */}
+      {isDirection && showForm && (
+        <form onSubmit={handleCreate} style={{
+          display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end',
+          background: 'var(--noir)', border: '1px solid var(--or-border)',
+          borderRadius: 6, padding: 14, marginBottom: 16,
+        }}>
+          <div className="form-group" style={{ minWidth: 200 }}>
+            <label className="form-label">Nom de la zone</label>
+            <input className="form-input" required placeholder="Ex : Hangar Sud, Rue Victor…"
+              value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} />
+          </div>
+          <div className="form-group" style={{ minWidth: 150 }}>
+            <label className="form-label">Type</label>
+            <select className="form-select" value={form.type_zone}
+              onChange={e => setForm(f => ({ ...f, type_zone: e.target.value }))}>
+              {TYPES_ZONE.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <button type="submit" className="btn btn-solid btn-sm">Créer (7 j)</button>
+        </form>
+      )}
+
+      {loading ? (
+        <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
+      ) : zones.length === 0 ? (
+        <div style={{ color: 'var(--texte-soft)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
+          Aucune zone enregistrée.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {zones.map(zone => {
+            const statut = getZoneStatut(zone.date_expiration)
+            const exp    = new Date(zone.date_expiration)
+            const diff   = exp - new Date()
+            const label  = diff > 0
+              ? `Expire dans ${fmtDelta(diff)} — ${exp.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+              : `Expiré depuis ${fmtDelta(-diff)} — ${exp.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+
+            return (
+              <div key={zone.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                background: statut.bg, border: `1px solid ${statut.border}`,
+                borderRadius: 8, padding: '12px 14px',
+              }}>
+                {/* Infos zone */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{zone.nom}</span>
+                    <span style={{
+                      fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
+                      color: 'var(--texte-soft)', background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid var(--or-border)', borderRadius: 3, padding: '1px 5px',
+                    }}>{zone.type_zone}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: statut.color, opacity: 0.9 }}>{label}</div>
+                </div>
+
+                {/* Badge statut */}
+                <span style={{
+                  fontSize: 12, fontWeight: 700, letterSpacing: '0.05em',
+                  color: statut.color, whiteSpace: 'nowrap',
+                  border: `1px solid ${statut.border}`, borderRadius: 4,
+                  padding: '3px 9px', background: 'rgba(0,0,0,0.3)',
+                }}>
+                  {statut.code === 'paye' ? '✓ Payé' : statut.code === 'alerte' ? '⚠ Alerte' : '✕ Non payé'}
+                </span>
+
+                {/* Boutons direction */}
+                {isDirection && (
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button
+                      className="btn btn-solid btn-sm"
+                      disabled={paying[zone.id]}
+                      onClick={() => handlePayer(zone)}
+                      title="Ajoute 7 jours à la validité"
+                    >
+                      {paying[zone.id] ? '…' : '+ 7j Payer'}
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(zone.id)} title="Supprimer la zone">✕</button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
