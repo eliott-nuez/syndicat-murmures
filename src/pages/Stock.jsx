@@ -54,7 +54,7 @@ export default function Stock() {
       supabase.from('coffre_stock').select('*, drogues(nom), coffres(nom, lieu)').order('updated_at', { ascending: false }),
       supabase.from('drogues').select('*').order('nom'),
       supabase.from('consommables').select('*').eq('actif', true).order('nom'),
-      supabase.from('consommable_stock').select('*, consommables(nom, cout), coffres(nom, lieu)').order('updated_at', { ascending: false }),
+      supabase.from('coffre_consommables').select('*, consommables(nom, cout), coffres(nom, lieu)').order('updated_at', { ascending: false }),
     ])
     setStockTotal(st || [])
     setCoffres(cof || [])
@@ -91,17 +91,17 @@ export default function Stock() {
     }
   }
 
-  // ── Helpers consommable_stock ──
+  // ── Helpers coffre_consommables ──
   const getConsoEntry = async (coffre_id, consommable_id) => {
-    const { data } = await supabase.from('consommable_stock').select('id, quantite').eq('coffre_id', coffre_id).eq('consommable_id', consommable_id).maybeSingle()
+    const { data } = await supabase.from('coffre_consommables').select('id, quantite').eq('coffre_id', coffre_id).eq('consommable_id', consommable_id).maybeSingle()
     return data
   }
   const upsertConso = async (coffre_id, consommable_id, delta) => {
     const existing = await getConsoEntry(coffre_id, consommable_id)
     if (existing) {
-      await supabase.from('consommable_stock').update({ quantite: Math.max(0, existing.quantite + delta), updated_at: new Date().toISOString() }).eq('id', existing.id)
+      await supabase.from('coffre_consommables').update({ quantite: Math.max(0, existing.quantite + delta), updated_at: new Date().toISOString() }).eq('id', existing.id)
     } else if (delta > 0) {
-      await supabase.from('consommable_stock').insert({ coffre_id, consommable_id, quantite: delta })
+      await supabase.from('coffre_consommables').insert({ coffre_id, consommable_id, quantite: delta })
     }
   }
 
