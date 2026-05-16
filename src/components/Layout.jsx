@@ -5,9 +5,9 @@ import { useInactivityLogout } from '../hooks/useInactivityLogout'
 // ── Icônes SVG ────────────────────────────────────────────────────────────────
 
 const Ico = ({ children }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.35"
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"
     strokeLinecap="round" strokeLinejoin="round"
-    width="17" height="17" style={{ flexShrink: 0 }}>
+    width="20" height="20" style={{ flexShrink: 0 }}>
     {children}
   </svg>
 )
@@ -211,7 +211,7 @@ export default function Layout({ children }) {
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
               fontWeight: 500,
-              color: isActive ? 'var(--or-pale)' : 'var(--texte-soft)',
+              color: isActive ? 'var(--or-pale)' : 'rgba(201,168,76,0.52)',
               background: isActive ? 'var(--or-glow)' : 'transparent',
               borderRight: isActive ? '2px solid var(--or)' : '2px solid transparent',
               transition: 'var(--transition)',
