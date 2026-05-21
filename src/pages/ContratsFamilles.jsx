@@ -62,13 +62,13 @@ function ChangerMotDePasse({ surnom }) {
 }
 
 const STATUTS = {
-  non_livre:  { label: 'Non livré',  color: '#e05555', bg: 'rgba(224,85,85,0.12)',  border: 'rgba(224,85,85,0.35)'  },
-  en_attente: { label: 'En attente', color: '#e8a84c', bg: 'rgba(232,168,76,0.12)', border: 'rgba(232,168,76,0.35)' },
-  livre:      { label: 'Livré',      color: '#4caf7d', bg: 'rgba(76,175,125,0.12)', border: 'rgba(76,175,125,0.35)' },
+  non_livre:          { label: 'Non livré',         color: '#e05555', bg: 'rgba(224,85,85,0.12)',  border: 'rgba(224,85,85,0.35)'  },
+  partiellement_livre: { label: 'Partiellement livré', color: '#e8a84c', bg: 'rgba(232,168,76,0.12)', border: 'rgba(232,168,76,0.35)' },
+  livre:              { label: 'Livré',             color: '#4caf7d', bg: 'rgba(76,175,125,0.12)', border: 'rgba(76,175,125,0.35)' },
 }
 
-// Cycle au clic : non_livre → en_attente → livre → non_livre
-const CYCLE = ['non_livre', 'en_attente', 'livre']
+// Cycle au clic : non_livre → partiellement_livre → livre → non_livre
+const CYCLE = ['non_livre', 'partiellement_livre', 'livre']
 
 const MOIS_LABELS = [
   'Janvier','Février','Mars','Avril','Mai','Juin',
