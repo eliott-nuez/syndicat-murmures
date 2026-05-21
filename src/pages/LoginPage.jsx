@@ -44,7 +44,7 @@ export default function LoginPage() {
     // Marquer le membre comme connecté
     await supabase.from('membres').update({ actif: true }).eq('id', data.id)
     localStorage.setItem('sdm_membre', JSON.stringify({ ...data, actif: true }))
-    navigate('/dashboard')
+    navigate(data.rang === 'familles' ? '/contrats-familles' : '/dashboard')
   }
 
   return (
@@ -105,7 +105,7 @@ export default function LoginPage() {
                 type="text"
                 placeholder="Votre surnom"
                 value={surnom}
-                onChange={e => setSurnom(e.target.value)}
+                onChange={e => setSurnom(e.target.value.toLowerCase())}
                 required
                 autoComplete="off"
               />
