@@ -1,6 +1,66 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
+function ChangerMotDePasse({ surnom }) {
+  const [form, setForm]   = useState({ actuel: '', nouveau: '', confirm: '' })
+  const [msg, setMsg]     = useState({ type: '', text: '' })
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setMsg({ type: '', text: '' })
+    if (form.nouveau !== form.confirm) {
+      setMsg({ type: 'error', text: 'Les mots de passe ne correspondent pas.' }); return
+    }
+    if (form.nouveau.length < 4) {
+      setMsg({ type: 'error', text: 'Mot de passe trop court (4 caractères min).' }); return
+    }
+    setSaving(true)
+    const email = `${surnom.trim().toLowerCase()}@sdm.local`
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password: form.actuel })
+    if (signInErr) {
+      setMsg({ type: 'error', text: 'Mot de passe actuel incorrect.' })
+      setSaving(false); return
+    }
+    const { error: updateErr } = await supabase.auth.updateUser({ password: form.nouveau })
+    setSaving(false)
+    if (updateErr) { setMsg({ type: 'error', text: 'Erreur : ' + updateErr.message }); return }
+    setMsg({ type: 'success', text: 'Mot de passe mis à jour.' })
+    setForm({ actuel: '', nouveau: '', confirm: '' })
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">Changer mon mot de passe</div>
+      {msg.text && (
+        <div className={`alert ${msg.type === 'error' ? 'alert-error' : 'alert-success'}`} style={{ marginBottom: 16 }}>
+          {msg.text}
+        </div>
+      )}
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 360 }}>
+        <div className="form-group">
+          <label className="form-label">Mot de passe actuel</label>
+          <input className="form-input" type="password" required value={form.actuel}
+            onChange={e => setForm(f => ({ ...f, actuel: e.target.value }))} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Nouveau mot de passe</label>
+          <input className="form-input" type="password" required value={form.nouveau}
+            onChange={e => setForm(f => ({ ...f, nouveau: e.target.value }))} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Confirmer le nouveau mot de passe</label>
+          <input className="form-input" type="password" required value={form.confirm}
+            onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))} />
+        </div>
+        <button type="submit" className="btn btn-solid" disabled={saving} style={{ alignSelf: 'flex-start' }}>
+          {saving ? 'Mise à jour…' : 'Changer le mot de passe'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 const STATUTS = {
   non_livre:  { label: 'Non livré',  color: '#e05555', bg: 'rgba(224,85,85,0.12)',  border: 'rgba(224,85,85,0.35)'  },
   en_attente: { label: 'En attente', color: '#e8a84c', bg: 'rgba(232,168,76,0.12)', border: 'rgba(232,168,76,0.35)' },
@@ -252,6 +312,11 @@ export default function ContratsFamilles() {
         <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--texte-soft)', opacity: 0.6 }}>
           Consultation uniquement
         </div>
+      )}
+
+      {/* Changement de mot de passe — familles uniquement */}
+      {membre.rang === 'familles' && (
+        <ChangerMotDePasse surnom={membre.surnom} />
       )}
     </div>
   )
