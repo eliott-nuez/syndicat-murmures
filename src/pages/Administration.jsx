@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-const RANGS = ['membre', 'responsable', 'direction']
+const RANGS = ['membre', 'responsable', 'direction', 'familles']
 
 export default function Administration() {
   // ── Membres ────────────────────────────────────────────────────────────────

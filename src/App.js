@@ -13,7 +13,8 @@ import Blanchiment    from './pages/Blanchiment'
 import Administration from './pages/Administration'
 import FicheMembre    from './pages/FicheMembre'
 import Calendrier     from './pages/Calendrier'
-import VentesGroupe   from './pages/VentesGroupe'
+import VentesGroupe       from './pages/VentesGroupe'
+import ContratsFamilles   from './pages/ContratsFamilles'
 import Layout         from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -37,6 +38,13 @@ export default function App() {
         <Route path="/dashboard"   element={<AppLayout><Dashboard /></AppLayout>} />
         <Route path="/fiche"       element={<AppLayout><FichePerso /></AppLayout>} />
         <Route path="/calendrier"  element={<AppLayout><Calendrier /></AppLayout>} />
+
+        {/* Familles + Responsable + Direction */}
+        <Route path="/contrats-familles" element={
+          <AppLayout roles={['familles','responsable','direction']}>
+            <ContratsFamilles />
+          </AppLayout>
+        } />
 
         {/* Responsable + Direction */}
         <Route path="/recap-global" element={

@@ -105,6 +105,16 @@ const IcoComptabilite = () => (
   </Ico>
 )
 
+/** Contrats Familles — Calendrier avec coche */
+const IcoContrats = () => (
+  <Ico>
+    <rect x="3" y="5" width="18" height="16" rx="1.5"/>
+    <path d="M3 10H21"/>
+    <path d="M8 3v4M16 3v4"/>
+    <path d="M7 15.5l3 3 6.5-6.5"/>
+  </Ico>
+)
+
 /** Administration — Parchemin scellé */
 const IcoAdmin = () => (
   <Ico>
@@ -126,9 +136,10 @@ const NAV_TOUS = [
   { to: '/calendrier', label: 'Calendrier',      icon: <IcoCalendrier /> },
 ]
 const NAV_RESPONSABLE = [
-  { to: '/recap-global',  label: 'Comptabilité',      icon: <IcoComptabilite /> },
-  { to: '/stock',         label: 'Stock & Catalogue',  icon: <IcoStock /> },
-  { to: '/ventes-groupe', label: 'Ventes groupe',      icon: <IcoVentes /> },
+  { to: '/recap-global',      label: 'Comptabilité',      icon: <IcoComptabilite /> },
+  { to: '/stock',             label: 'Stock & Catalogue',  icon: <IcoStock /> },
+  { to: '/ventes-groupe',     label: 'Ventes groupe',      icon: <IcoVentes /> },
+  { to: '/contrats-familles', label: 'Contrats Familles',  icon: <IcoContrats /> },
 ]
 const NAV_DIRECTION = [
   { to: '/fiche-membre', label: 'Fiche membre',   icon: <IcoFicheMembre /> },
@@ -158,12 +169,15 @@ export default function Layout({ children }) {
 
   const isResponsable = ['responsable', 'direction'].includes(rang)
   const isDirection   = rang === 'direction'
+  const isFamilles    = rang === 'familles'
 
-  const navItems = [
-    ...NAV_TOUS,
-    ...(isResponsable ? NAV_RESPONSABLE : []),
-    ...(isDirection   ? NAV_DIRECTION   : []),
-  ]
+  const navItems = isFamilles
+    ? [{ to: '/contrats-familles', label: 'Contrats', icon: <IcoContrats /> }]
+    : [
+        ...NAV_TOUS,
+        ...(isResponsable ? NAV_RESPONSABLE : []),
+        ...(isDirection   ? NAV_DIRECTION   : []),
+      ]
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>

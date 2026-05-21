@@ -20,6 +20,11 @@ export default function ProtectedRoute({ children, roles = [] }) {
 
   if (!membre) return <Navigate to="/login" replace />
 
+  // Familles : accès uniquement à /contrats-familles
+  if (membre.rang === 'familles' && !roles.includes('familles'))
+    return <Navigate to="/contrats-familles" replace />
+
+  // Autres rôles restreints
   if (roles.length > 0 && !roles.includes(membre.rang))
     return <Navigate to="/dashboard" replace />
 
