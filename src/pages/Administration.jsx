@@ -124,10 +124,10 @@ export default function Administration() {
       return
     }
 
-    // 2. Insérer dans la table membres
+    // 2. Insérer dans la table membres (sans mot de passe — Auth uniquement)
     const { error } = await supabase.from('membres').insert({
       surnom: form.surnom, nom: form.nom || null, prenom: form.prenom || null,
-      mot_de_passe: form.mot_de_passe, rang: form.rang, actif: form.actif,
+      rang: form.rang, actif: form.actif,
     })
     setSaving(false)
     if (error) { setMsg({ type: 'error', text: error.message }); return }
@@ -149,8 +149,7 @@ export default function Administration() {
     if (!mdp || mdp.length < 4) { setMsg({ type: 'error', text: 'Mot de passe trop court.' }); return }
     const { data: mem, error: memErr } = await supabase.from('membres').select('surnom').eq('id', id).single()
     if (memErr || !mem) { setMsg({ type: 'error', text: 'Membre introuvable.' }); return }
-    const { error: tableErr } = await supabase.from('membres').update({ mot_de_passe: mdp }).eq('id', id)
-    if (tableErr) { setMsg({ type: 'error', text: 'Erreur table: ' + tableErr.message }); return }
+    // Mise à jour uniquement dans Supabase Auth (plus de stockage en clair en table)
     const { error: rpcErr } = await supabase.rpc('admin_update_auth_password', { p_surnom: mem.surnom, p_password: mdp })
     if (rpcErr) { setMsg({ type: 'error', text: 'Erreur Auth: ' + rpcErr.message }); return }
     setMsg({ type: 'success', text: 'Mot de passe mis à jour.' })

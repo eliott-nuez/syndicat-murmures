@@ -180,14 +180,15 @@ export default function FichePerso() {
       return
     }
     setSavingMdp(true)
-    const { data: rec } = await supabase.from('membres').select('mot_de_passe').eq('id', membre.id).single()
-    if (rec?.mot_de_passe !== mdpForm.actuel) {
+    // Vérifier l'ancien mot de passe via Supabase Auth (jamais en clair en base)
+    const email = `${membre.surnom.trim().toLowerCase()}@sdm.local`
+    const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password: mdpForm.actuel })
+    if (signInErr) {
       setMsgMdp({ type: 'error', text: 'Mot de passe actuel incorrect.' })
       setSavingMdp(false)
       return
     }
-    // Mettre à jour dans la table membres ET dans Supabase Auth
-    await supabase.from('membres').update({ mot_de_passe: mdpForm.nouveau }).eq('id', membre.id)
+    // Mettre à jour uniquement dans Supabase Auth
     await supabase.auth.updateUser({ password: mdpForm.nouveau })
     setSavingMdp(false)
     setMsgMdp({ type: 'success', text: 'Mot de passe mis à jour.' })
