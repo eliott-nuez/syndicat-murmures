@@ -14,11 +14,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Mot de passe trop court (min 4 caractères)' })
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL
+  // Accepte SUPABASE_URL ou REACT_APP_SUPABASE_URL (déjà présent sur Vercel)
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL
   const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceKey) {
-    return res.status(500).json({ error: 'Configuration serveur manquante (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' })
+    return res.status(500).json({ error: 'Configuration serveur manquante (SUPABASE_SERVICE_ROLE_KEY manquante)' })
   }
 
   const email = `${surnom.trim().toLowerCase()}@sdm.local`
