@@ -71,28 +71,35 @@ async def send_monitor(content: str, view: discord.ui.View = None):
 # ── Correspondance personnage ↔ membre ───────────────────────────────────────
 async def find_membre(nom_personnage: str) -> dict | None:
     """
-    Cherche un membre par nom de personnage.
-    Essaie d'abord le champ nom_ig, puis surnom (correspondance exacte ilike).
-    Retourne le dict membre (id, surnom, nom_ig) ou None.
+    Cherche un membre par nom de personnage (champs prenom + nom de la table membres).
+    Essaie les deux ordres possibles : "Prénom Nom" et "Nom Prénom".
+    Retourne le dict membre (id, surnom, prenom, nom) ou None.
     """
-    nom = nom_personnage.strip()
-    # 1. Cherche sur nom_ig (nom du personnage en jeu)
+    parts = nom_personnage.strip().split(' ', 1)
+    if len(parts) != 2:
+        return None
+
+    a, b = parts[0].strip(), parts[1].strip()
+
+    # Ordre 1 : "Prénom Nom" → prenom=a, nom=b
     try:
         r = await db(lambda: supabase.table('membres')
-            .select('id, surnom, nom_ig')
-            .ilike('nom_ig', nom)
+            .select('id, surnom, prenom, nom')
+            .ilike('prenom', a)
+            .ilike('nom', b)
             .maybe_single()
             .execute())
         if r.data:
             return r.data
     except Exception:
-        pass  # colonne nom_ig absente → continuer
+        pass
 
-    # 2. Fallback : cherche sur surnom
+    # Ordre 2 : "Nom Prénom" → prenom=b, nom=a
     try:
         r = await db(lambda: supabase.table('membres')
-            .select('id, surnom, nom_ig')
-            .ilike('surnom', nom)
+            .select('id, surnom, prenom, nom')
+            .ilike('prenom', b)
+            .ilike('nom', a)
             .maybe_single()
             .execute())
         if r.data:
