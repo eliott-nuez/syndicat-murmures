@@ -19,8 +19,12 @@ export default function Stock() {
   const [consoStock, setConsoStock]           = useState([])
   const [drogues, setDrogues]                 = useState([])
   const [consommables, setConsommables]       = useState([])
-  const [filtreDrogue, setFiltreDrogue]       = useState('')
-  const [filtreLieu, setFiltreLieu]           = useState('')
+  const [filtreDrogue, setFiltreDrogue]         = useState('')
+  const [filtreLieu, setFiltreLieu]             = useState('')
+  const [filtreConsoItem, setFiltreConsoItem]   = useState('')
+  const [filtreConsoLieu, setFiltreConsoLieu]   = useState('')
+  const [searchDrogues, setSearchDrogues]       = useState('')
+  const [searchConsos, setSearchConsos]         = useState('')
   const [loading, setLoading]                 = useState(true)
   const [saving, setSaving]                   = useState(false)
   const [msg, setMsg]                         = useState({ type: '', text: '' })
@@ -207,6 +211,16 @@ export default function Stock() {
     return true
   })
   const lieux = [...new Set(coffreStock.map(cs => cs.coffres?.lieu).filter(Boolean))]
+
+  const consoFiltres = consoStock.filter(cs => {
+    if (filtreConsoItem && cs.consommable_id !== filtreConsoItem) return false
+    if (filtreConsoLieu && cs.coffres?.lieu !== filtreConsoLieu) return false
+    return true
+  })
+  const lieuxConso = [...new Set(consoStock.map(cs => cs.coffres?.lieu).filter(Boolean))]
+
+  const droguesFiltrees   = drogues.filter(d => !searchDrogues || d.nom.toLowerCase().includes(searchDrogues.toLowerCase()))
+  const consosFiltrees    = consommables.filter(c => !searchConsos || c.nom.toLowerCase().includes(searchConsos.toLowerCase()))
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
@@ -490,29 +504,57 @@ export default function Stock() {
       </div>
 
       {/* Stock par coffre — consommables */}
-      {consoStock.length > 0 && (
-        <div className="card">
-          <div className="card-title">Stock consommables par coffre</div>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Lieu</th><th>Coffre</th><th>Consommable</th><th>Quantité</th><th>Mise à jour</th></tr></thead>
-              <tbody>
-                {consoStock.map(cs => (
-                  <tr key={cs.id}>
-                    <td style={{ color: 'var(--texte-soft)' }}>{cs.coffres?.lieu || '—'}</td>
-                    <td>{cs.coffres?.nom || '—'}</td>
-                    <td>{cs.consommables?.nom || '—'}</td>
-                    <td style={{ color: cs.quantite <= 0 ? '#e05555' : 'var(--texte)' }}>{cs.quantite}</td>
-                    <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                      {new Date(cs.updated_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="card">
+        <div className="card-title">Stock consommables par coffre</div>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label className="form-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>Consommable</label>
+            <select className="form-select" style={{ minWidth: 180 }}
+              value={filtreConsoItem} onChange={e => setFiltreConsoItem(e.target.value)}>
+              <option value="">Tous</option>
+              {[...new Set(consoStock.map(cs => cs.consommable_id))].map(id => {
+                const nom = consoStock.find(cs => cs.consommable_id === id)?.consommables?.nom || id
+                return <option key={id} value={id}>{nom}</option>
+              })}
+            </select>
           </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <label className="form-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>Lieu</label>
+            <select className="form-select" style={{ minWidth: 180 }}
+              value={filtreConsoLieu} onChange={e => setFiltreConsoLieu(e.target.value)}>
+              <option value="">Tous</option>
+              {lieuxConso.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          {(filtreConsoItem || filtreConsoLieu) && (
+            <button className="btn btn-or btn-sm" onClick={() => { setFiltreConsoItem(''); setFiltreConsoLieu('') }}>
+              ✕ Réinitialiser
+            </button>
+          )}
         </div>
-      )}
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Lieu</th><th>Coffre</th><th>Consommable</th><th>Quantité</th><th>Mise à jour</th></tr></thead>
+            <tbody>
+              {consoFiltres.length === 0 ? (
+                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>
+                  {consoStock.length === 0 ? 'Aucun consommable en stock.' : 'Aucun résultat'}
+                </td></tr>
+              ) : consoFiltres.map(cs => (
+                <tr key={cs.id}>
+                  <td style={{ color: 'var(--texte-soft)' }}>{cs.coffres?.lieu || '—'}</td>
+                  <td>{cs.coffres?.nom || '—'}</td>
+                  <td>{cs.consommables?.nom || '—'}</td>
+                  <td style={{ color: cs.quantite <= 0 ? '#e05555' : 'var(--texte)' }}>{cs.quantite}</td>
+                  <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                    {new Date(cs.updated_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* ── Catalogue (direction uniquement) ── */}
       {isDirection && (
@@ -547,11 +589,21 @@ export default function Stock() {
 
           <div className="card">
             <div className="card-title">Catalogue drogues ({drogues.length})</div>
+            <div style={{ marginBottom: 14 }}>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Rechercher une drogue…"
+                value={searchDrogues}
+                onChange={e => setSearchDrogues(e.target.value)}
+                style={{ maxWidth: 300 }}
+              />
+            </div>
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Nom</th><th>Prix de revient</th><th>Seuil alerte</th><th style={{ width: 160 }}></th></tr></thead>
                 <tbody>
-                  {drogues.map(d => {
+                  {droguesFiltrees.map(d => {
                     const editing = editsDrogues[d.id]
                     return (
                       <tr key={d.id}>
@@ -572,7 +624,7 @@ export default function Stock() {
                       </tr>
                     )
                   })}
-                  {drogues.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>Aucune drogue.</td></tr>}
+                  {droguesFiltrees.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>{searchDrogues ? 'Aucun résultat.' : 'Aucune drogue.'}</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -601,11 +653,21 @@ export default function Stock() {
 
           <div className="card">
             <div className="card-title">Liste consommables ({consommables.length})</div>
+            <div style={{ marginBottom: 14 }}>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Rechercher un consommable…"
+                value={searchConsos}
+                onChange={e => setSearchConsos(e.target.value)}
+                style={{ maxWidth: 300 }}
+              />
+            </div>
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Nom</th><th>Coût</th><th>Type</th><th>Activité</th><th>Actif</th><th style={{ width: 160 }}></th></tr></thead>
                 <tbody>
-                  {consommables.map(c => {
+                  {consosFiltrees.map(c => {
                     const editing = editsConso[c.id]
                     return (
                       <tr key={c.id}>
@@ -630,7 +692,7 @@ export default function Stock() {
                       </tr>
                     )
                   })}
-                  {consommables.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>Aucun consommable.</td></tr>}
+                  {consosFiltrees.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>{searchConsos ? 'Aucun résultat.' : 'Aucun consommable.'}</td></tr>}
                 </tbody>
               </table>
             </div>
