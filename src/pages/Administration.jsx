@@ -10,7 +10,7 @@ export default function Administration() {
   const [loading, setLoading]  = useState(true)
   const [saving, setSaving]    = useState(false)
   const [msg, setMsg]          = useState({ type: '', text: '' })
-  const [form, setForm]        = useState({ surnom: '', nom: '', prenom: '', mot_de_passe: '', rang: 'membre', actif: true })
+  const [form, setForm]        = useState({ surnom: '', mot_de_passe: '', rang: 'membre', actif: true })
   const [editRang, setEditRang] = useState({})
   const [editMdp, setEditMdp]  = useState({})
   const [newMdp, setNewMdp]    = useState({})
@@ -126,14 +126,13 @@ export default function Administration() {
 
     // 2. Insérer dans la table membres (sans mot de passe — Auth uniquement)
     const { error } = await supabase.from('membres').insert({
-      surnom: form.surnom, nom: form.nom || null, prenom: form.prenom || null,
-      rang: form.rang, actif: form.actif,
+      surnom: form.surnom, rang: form.rang, actif: form.actif,
     })
     setSaving(false)
     if (error) { setMsg({ type: 'error', text: error.message }); return }
     setMsg({ type: 'success', text: `Membre "${form.surnom}" créé.` })
     setShowForm(false)
-    setForm({ surnom: '', nom: '', prenom: '', mot_de_passe: '', rang: 'membre', actif: true })
+    setForm({ surnom: '', mot_de_passe: '', rang: 'membre', actif: true })
     fetchMembres()
   }
 
@@ -373,8 +372,6 @@ export default function Administration() {
             <div className="grid-2" style={{ gap: 14, marginBottom: 14 }}>
               <div className="form-group"><label className="form-label">Surnom *</label><input className="form-input" required value={form.surnom} onChange={e => setForm({ ...form, surnom: e.target.value })} /></div>
               <div className="form-group"><label className="form-label">Mot de passe *</label><input className="form-input" type="password" required value={form.mot_de_passe} onChange={e => setForm({ ...form, mot_de_passe: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Prénom</label><input className="form-input" value={form.prenom} onChange={e => setForm({ ...form, prenom: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">Nom</label><input className="form-input" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} /></div>
               <div className="form-group"><label className="form-label">Rang</label><select className="form-select" value={form.rang} onChange={e => setForm({ ...form, rang: e.target.value })}>{RANGS.map(r => <option key={r}>{r}</option>)}</select></div>
               <div className="form-group" style={{ justifyContent: 'flex-end' }}>
                 <label className="form-label">Actif</label>
@@ -395,13 +392,12 @@ export default function Administration() {
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Surnom</th><th>Prénom / Nom</th><th>Rang</th><th>Statut</th><th>Créé le</th><th>Mot de passe</th><th></th></tr>
+              <tr><th>Surnom</th><th>Rang</th><th>Statut</th><th>Créé le</th><th>Mot de passe</th><th></th></tr>
             </thead>
             <tbody>
               {membres.map(m => (
                 <tr key={m.id}>
                   <td style={{ fontWeight: 600 }}>{m.surnom}</td>
-                  <td style={{ color: 'var(--texte-soft)' }}>{[m.prenom, m.nom].filter(Boolean).join(' ') || '—'}</td>
                   <td>
                     {editRang[m.id] ? (
                       <div style={{ display: 'flex', gap: 6 }}>
