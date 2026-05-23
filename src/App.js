@@ -15,6 +15,7 @@ import FicheMembre    from './pages/FicheMembre'
 import Calendrier     from './pages/Calendrier'
 import VentesGroupe       from './pages/VentesGroupe'
 import ContratsFamilles   from './pages/ContratsFamilles'
+import Logs           from './pages/Logs'
 import Layout         from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -56,6 +57,9 @@ export default function App() {
         {/* Responsable + Direction */}
         <Route path="/stock" element={
           <AppLayout roles={['responsable','direction']}><Stock /></AppLayout>
+        } />
+        <Route path="/logs" element={
+          <AppLayout roles={['responsable','direction']}><Logs /></AppLayout>
         } />
         <Route path="/ventes-groupe" element={
           <AppLayout roles={['responsable','direction']}><VentesGroupe /></AppLayout>
