@@ -40,7 +40,10 @@ export default function FicheMembre() {
     note:              '',
     heure_faite:       localNow(),
   })
-  const [savingAct, setSavingAct] = useState(false)
+  const [savingAct, setSavingAct]       = useState(false)
+  const [editActId, setEditActId]       = useState(null)
+  const [editActForm, setEditActForm]   = useState({ type_code: '', somme_argent_sale: '', note: '' })
+  const [savingEditAct, setSavingEditAct] = useState(false)
   const [lignesVente, setLignesVente] = useState([emptyLigne()])
 
   function emptyLigne() {
@@ -153,6 +156,25 @@ export default function FicheMembre() {
       setLignesVente([emptyLigne()])
       fetchVentes()
     }
+  }
+
+  const startEditAct = (a) => {
+    setEditActId(a.id)
+    setEditActForm({ type_code: a.type_code, somme_argent_sale: String(a.somme_argent_sale), note: a.note || '' })
+  }
+  const cancelEditAct = () => { setEditActId(null); setEditActForm({ type_code: '', somme_argent_sale: '', note: '' }) }
+  const handleSaveAct = async () => {
+    const somme = parseFloat(editActForm.somme_argent_sale)
+    if (isNaN(somme) || somme < 0) { setMsg({ type: 'error', text: 'Montant invalide.' }); return }
+    setSavingEditAct(true)
+    const { error } = await supabase.from('activites')
+      .update({ type_code: editActForm.type_code, somme_argent_sale: somme, note: editActForm.note || null })
+      .eq('id', editActId)
+    setSavingEditAct(false)
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
+    setMsg({ type: 'success', text: 'Activité mise à jour.' })
+    cancelEditAct()
+    fetchActivites()
   }
 
   const handleDeleteActivite = async (id) => {
@@ -333,20 +355,63 @@ export default function FicheMembre() {
                 </div>
                 <div className="table-wrap">
                   <table>
-                    <thead><tr><th>Type</th><th>Heure</th><th>Prochaine dispo</th><th>Somme</th><th>Note</th>{viewer.rang === 'direction' && <th></th>}</tr></thead>
+                    <thead><tr><th>Type</th><th>Heure</th><th>Prochaine dispo</th><th>Somme</th><th>Note</th><th></th></tr></thead>
                     <tbody>
-                      {activites.map(a => (
-                        <tr key={a.id}>
-                          <td>{a.type_code}</td>
-                          <td>{fmtDate(a.heure_faite)}</td>
-                          <td>{fmtDate(a.prochain_dispo)}</td>
-                          <td style={{ color: 'var(--or-pale)' }}>{fmt(a.somme_argent_sale)}</td>
-                          <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{a.note || '—'}</td>
-                          {viewer.rang === 'direction' && (
-                            <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteActivite(a.id)}>✕</button></td>
-                          )}
-                        </tr>
-                      ))}
+                      {activites.map(a => {
+                        const isEditing = editActId === a.id
+                        if (isEditing) return (
+                          <tr key={a.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
+                            <td>
+                              <select className="form-select" style={{ minWidth: 110, padding: '3px 8px', fontSize: 12 }}
+                                value={editActForm.type_code}
+                                onChange={e => setEditActForm(f => ({ ...f, type_code: e.target.value }))}>
+                                {Object.keys(COOLDOWNS_H).map(t => <option key={t} value={t}>{t}</option>)}
+                              </select>
+                            </td>
+                            <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(a.heure_faite)}</td>
+                            <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(a.prochain_dispo)}</td>
+                            <td>
+                              <input className="form-input" type="number" min="0" step="1"
+                                style={{ width: 110, padding: '3px 8px', fontSize: 13, fontFamily: 'var(--font-corps)' }}
+                                value={editActForm.somme_argent_sale}
+                                onChange={e => setEditActForm(f => ({ ...f, somme_argent_sale: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSaveAct(); if (e.key === 'Escape') cancelEditAct() }}
+                                autoFocus />
+                            </td>
+                            <td>
+                              <input className="form-input" type="text"
+                                style={{ minWidth: 140, padding: '3px 8px', fontSize: 12 }}
+                                placeholder="Note…"
+                                value={editActForm.note}
+                                onChange={e => setEditActForm(f => ({ ...f, note: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSaveAct(); if (e.key === 'Escape') cancelEditAct() }} />
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-solid btn-sm" disabled={savingEditAct} onClick={handleSaveAct}>{savingEditAct ? '…' : '✓'}</button>
+                                <button className="btn btn-or btn-sm" onClick={cancelEditAct}>✕</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                        return (
+                          <tr key={a.id}>
+                            <td>{a.type_code}</td>
+                            <td style={{ fontSize: 12 }}>{fmtDate(a.heure_faite)}</td>
+                            <td style={{ fontSize: 12 }}>{fmtDate(a.prochain_dispo)}</td>
+                            <td style={{ color: 'var(--or-pale)' }}>{fmt(a.somme_argent_sale)}</td>
+                            <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{a.note || '—'}</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-or btn-sm" onClick={() => startEditAct(a)} title="Modifier">✎</button>
+                                {viewer.rang === 'direction' && (
+                                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteActivite(a.id)}>✕</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
