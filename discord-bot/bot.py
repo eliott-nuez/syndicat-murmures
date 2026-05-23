@@ -302,9 +302,13 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
     signe    = f'+{quantite}' if action == 'ajout' else f'-{quantite}'
 
     # ── Cherche le coffre ──────────────────────────────────────────────────────
-    r = await db(lambda: supabase.table('coffres')
-        .select('id, lieu').ilike('lieu', lieu).maybe_single().execute())
-    coffre = r.data
+    try:
+        r = await db(lambda: supabase.table('coffres')
+            .select('id, lieu').ilike('lieu', lieu).limit(1).execute())
+        coffre = (r.data[0] if r and r.data else None) if r is not None else None
+    except Exception as e:
+        logger.error(f'Erreur lookup coffre "{lieu}": {e}')
+        return
 
     if not coffre:
         if not is_recovery:
@@ -321,9 +325,13 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
     pseudo = membre_label(membre, personnage_nom)
 
     # ── Cherche dans drogues ───────────────────────────────────────────────────
-    r = await db(lambda: supabase.table('drogues')
-        .select('id, nom').ilike('nom', ressource.strip()).maybe_single().execute())
-    drogue = r.data
+    try:
+        r = await db(lambda: supabase.table('drogues')
+            .select('id, nom').ilike('nom', ressource.strip()).limit(1).execute())
+        drogue = (r.data[0] if r and r.data else None) if r is not None else None
+    except Exception as e:
+        logger.error(f'Erreur lookup drogue "{ressource}": {e}')
+        drogue = None
 
     if drogue:
         await upsert_drogue_stock(coffre['id'], drogue['id'], delta)
@@ -335,9 +343,13 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
         return
 
     # ── Cherche dans consommables ──────────────────────────────────────────────
-    r = await db(lambda: supabase.table('consommables')
-        .select('id, nom').ilike('nom', ressource.strip()).maybe_single().execute())
-    conso = r.data
+    try:
+        r = await db(lambda: supabase.table('consommables')
+            .select('id, nom').ilike('nom', ressource.strip()).limit(1).execute())
+        conso = (r.data[0] if r and r.data else None) if r is not None else None
+    except Exception as e:
+        logger.error(f'Erreur lookup conso "{ressource}": {e}')
+        conso = None
 
     if conso:
         await upsert_conso_stock(coffre['id'], conso['id'], delta)
