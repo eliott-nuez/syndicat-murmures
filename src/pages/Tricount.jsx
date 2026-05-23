@@ -12,6 +12,9 @@ export default function Tricount() {
   const [saving, setSaving]             = useState(false)
   const [msg, setMsg]                   = useState('')
   const [histSort, setHistSort]         = useState({ key: 'date_depense', dir: 'desc' })
+  const [editingId, setEditingId]       = useState(null)
+  const [editForm, setEditForm]         = useState({ montant_total: '', categorie: '', description: '' })
+  const [savingEdit, setSavingEdit]     = useState(false)
 
   const [form, setForm] = useState({
     payeur_id:     '',
@@ -164,6 +167,29 @@ export default function Tricount() {
     setShowRembForm(false)
     setFormRemb({ de_id: '', vers_id: '', montant: '', note: '' })
     setMsg('Remboursement enregistré.')
+    fetchAll()
+  }
+
+  // ── Édition dépense ──
+  const startEdit = (d) => {
+    setEditingId(d.id)
+    setEditForm({ montant_total: String(d.montant_total), categorie: d.categorie, description: d.description || '' })
+  }
+
+  const cancelEdit = () => { setEditingId(null); setEditForm({ montant_total: '', categorie: '', description: '' }) }
+
+  const handleSaveEdit = async () => {
+    const montant = parseFloat(editForm.montant_total)
+    if (isNaN(montant) || montant < 0) { setMsg('Montant invalide.'); return }
+    setSavingEdit(true)
+    const { error } = await supabase
+      .from('depenses')
+      .update({ montant_total: montant, categorie: editForm.categorie, description: editForm.description })
+      .eq('id', editingId)
+    setSavingEdit(false)
+    if (error) { setMsg('Erreur : ' + error.message); return }
+    cancelEdit()
+    setMsg('Dépense mise à jour.')
     fetchAll()
   }
 
@@ -419,6 +445,7 @@ export default function Tricount() {
                     { label: 'Catégorie',   key: 'categorie'     },
                     { label: 'Description', key: 'description'   },
                     { label: 'Montant',     key: 'montant_total' },
+                    { label: '',            key: null            },
                   ].map(col => (
                     <th
                       key={col.label}
@@ -433,7 +460,68 @@ export default function Tricount() {
               </thead>
               <tbody>
                 {sortedDepenses.map(d => {
-                  const isRemb = d.categorie === 'Remboursement'
+                  const isRemb   = d.categorie === 'Remboursement'
+                  const isEditing = editingId === d.id
+
+                  if (isEditing) {
+                    return (
+                      <tr key={d.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
+                        {/* Date — non modifiable */}
+                        <td style={{ color: 'var(--texte-soft)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                          {new Date(d.date_depense).toLocaleDateString('fr-FR')}
+                        </td>
+                        {/* Payeur — non modifiable */}
+                        <td style={{ fontWeight: 600, color: isRemb ? '#5cba8a' : 'var(--or)' }}>
+                          {d.membres?.surnom || '—'}
+                        </td>
+                        {/* Catégorie — éditable */}
+                        <td>
+                          <select
+                            className="form-select"
+                            style={{ minWidth: 110, padding: '3px 8px', fontSize: 12 }}
+                            value={editForm.categorie}
+                            onChange={e => setEditForm(f => ({ ...f, categorie: e.target.value }))}
+                          >
+                            {[...CATEGORIES, 'Remboursement'].map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </td>
+                        {/* Description — éditable */}
+                        <td>
+                          <input
+                            className="form-input"
+                            style={{ minWidth: 180, padding: '3px 8px', fontSize: 12 }}
+                            value={editForm.description}
+                            onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                          />
+                        </td>
+                        {/* Montant — éditable */}
+                        <td>
+                          <input
+                            className="form-input"
+                            type="number" min="0" step="0.01"
+                            style={{ width: 100, padding: '3px 8px', fontSize: 13, fontFamily: 'var(--font-corps)' }}
+                            value={editForm.montant_total}
+                            onChange={e => setEditForm(f => ({ ...f, montant_total: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') cancelEdit() }}
+                            autoFocus
+                          />
+                        </td>
+                        {/* Actions */}
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-solid btn-sm" disabled={savingEdit} onClick={handleSaveEdit}>
+                              {savingEdit ? '…' : '✓'}
+                            </button>
+                            <button className="btn btn-or btn-sm" onClick={cancelEdit}>✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+
                   return (
                     <tr key={d.id} style={{ opacity: isRemb ? 0.8 : 1 }}>
                       <td style={{ color: 'var(--texte-soft)', fontSize: 12, whiteSpace: 'nowrap' }}>
@@ -461,6 +549,15 @@ export default function Tricount() {
                         color: isRemb ? '#5cba8a' : 'var(--or-pale)', whiteSpace: 'nowrap',
                       }}>
                         {isRemb ? '↩ ' : ''}{fmt(d.montant_total)}
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-or btn-sm"
+                          onClick={() => startEdit(d)}
+                          title="Modifier cette dépense"
+                        >
+                          ✎
+                        </button>
                       </td>
                     </tr>
                   )
