@@ -77,7 +77,7 @@ export default function Administration() {
   const [showFormTranche, setShowFormTranche] = useState(false)
   const [savingComm, setSavingComm]         = useState(false)
   const [msgComm, setMsgComm]              = useState({ type: '', text: '' })
-  const [editTaux, setEditTaux]             = useState({}) // { [id]: string }
+  const [editTranche, setEditTranche]       = useState({}) // { [id]: { min_montant, max_montant, taux_pct } }
 
 
   useEffect(() => {
@@ -194,15 +194,23 @@ export default function Administration() {
     fetchCommission()
   }
 
-  const handleUpdateTaux = async (id) => {
-    const val = parseFloat(editTaux[id])
-    if (isNaN(val) || val < 0 || val > 100) {
-      setMsgComm({ type: 'error', text: 'Taux invalide (0–100).' }); return
-    }
-    const { error } = await supabase.from('tranches_commission').update({ taux_pct: val }).eq('id', id)
+  const startEditTranche = (t) => setEditTranche(prev => ({
+    ...prev,
+    [t.id]: { min_montant: String(t.min_montant), max_montant: t.max_montant !== null ? String(t.max_montant) : '', taux_pct: String(t.taux_pct) }
+  }))
+  const cancelEditTranche = (id) => setEditTranche(prev => { const n = { ...prev }; delete n[id]; return n })
+  const handleUpdateTranche = async (id) => {
+    const e = editTranche[id]
+    const min = parseFloat(e.min_montant)
+    const max = e.max_montant === '' ? null : parseFloat(e.max_montant)
+    const taux = parseFloat(e.taux_pct)
+    if (isNaN(min) || min < 0) { setMsgComm({ type: 'error', text: 'Montant min invalide.' }); return }
+    if (max !== null && (isNaN(max) || max <= min)) { setMsgComm({ type: 'error', text: 'Montant max doit être supérieur au min.' }); return }
+    if (isNaN(taux) || taux < 0 || taux > 100) { setMsgComm({ type: 'error', text: 'Taux invalide (0–100).' }); return }
+    const { error } = await supabase.from('tranches_commission').update({ min_montant: min, max_montant: max, taux_pct: taux }).eq('id', id)
     if (error) { setMsgComm({ type: 'error', text: error.message }); return }
-    setMsgComm({ type: 'success', text: 'Taux mis à jour.' })
-    setEditTaux(prev => { const n = { ...prev }; delete n[id]; return n })
+    setMsgComm({ type: 'success', text: 'Tranche mise à jour.' })
+    cancelEditTranche(id)
     fetchCommission()
   }
 
@@ -299,61 +307,105 @@ export default function Administration() {
             </form>
           )}
 
+          {/* Alerte chevauchement */}
+          {(() => {
+            const sorted = [...tranches].sort((a, b) => a.ordre - b.ordre)
+            const overlaps = []
+            for (let i = 0; i < sorted.length - 1; i++) {
+              const curr = sorted[i], next = sorted[i + 1]
+              if (curr.max_montant !== null && next.min_montant < curr.max_montant)
+                overlaps.push(`${fmt(next.min_montant)} chevauche la tranche précédente (max ${fmt(curr.max_montant)})`)
+              if (curr.max_montant !== null && next.min_montant > curr.max_montant)
+                overlaps.push(`Trou entre ${fmt(curr.max_montant)} et ${fmt(next.min_montant)} — zone sans commission`)
+            }
+            return overlaps.length > 0 ? (
+              <div className="alert alert-error" style={{ marginBottom: 12 }}>
+                ⚠ Problème de tranches détecté : {overlaps.join(' · ')}
+              </div>
+            ) : null
+          })()}
+
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Tranche</th>
+                  <th>Min ($)</th>
+                  <th>Max ($)</th>
                   <th>Taux base</th>
                   {['membre', 'responsable', 'direction'].map(r => (
                     <th key={r} style={{ textTransform: 'capitalize' }}>
-                      {r} ×{multis[r]} = <span style={{ color: 'var(--or)' }}>{((Number(multis[r]) || 0) * 0).toFixed(0)}%</span>
+                      {r} ×{multis[r]}
                     </th>
                   ))}
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {[...tranches].sort((a, b) => a.ordre - b.ordre).map(t => (
-                  <tr key={t.id}>
-                    <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                      {fmt(t.min_montant)} → {t.max_montant !== null ? fmt(t.max_montant) : '∞'}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>
-                      {editTaux[t.id] !== undefined ? (
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                          <input
-                            className="form-input" type="number" min="0" max="100" step="0.1"
-                            style={{ width: 70, padding: '3px 7px', fontSize: 13 }}
-                            value={editTaux[t.id]}
-                            onChange={e => setEditTaux(prev => ({ ...prev, [t.id]: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Enter') handleUpdateTaux(t.id); if (e.key === 'Escape') setEditTaux(prev => { const n = { ...prev }; delete n[t.id]; return n }) }}
-                            autoFocus
-                          />
-                          <span style={{ fontSize: 13 }}>%</span>
-                          <button className="btn btn-solid btn-sm" onClick={() => handleUpdateTaux(t.id)}>✓</button>
-                          <button className="btn btn-or btn-sm" onClick={() => setEditTaux(prev => { const n = { ...prev }; delete n[t.id]; return n })}>✕</button>
-                        </div>
+                {[...tranches].sort((a, b) => a.ordre - b.ordre).map(t => {
+                  const ed = editTranche[t.id]
+                  return (
+                    <tr key={t.id}>
+                      {ed ? (
+                        <>
+                          <td>
+                            <input className="form-input" type="number" min="0" step="1"
+                              style={{ width: 110, padding: '3px 7px', fontSize: 13 }}
+                              value={ed.min_montant}
+                              onChange={e => setEditTranche(prev => ({ ...prev, [t.id]: { ...prev[t.id], min_montant: e.target.value } }))}
+                              onKeyDown={e => { if (e.key === 'Enter') handleUpdateTranche(t.id); if (e.key === 'Escape') cancelEditTranche(t.id) }} />
+                          </td>
+                          <td>
+                            <input className="form-input" type="number" min="0" step="1"
+                              style={{ width: 110, padding: '3px 7px', fontSize: 13 }}
+                              placeholder="∞"
+                              value={ed.max_montant}
+                              onChange={e => setEditTranche(prev => ({ ...prev, [t.id]: { ...prev[t.id], max_montant: e.target.value } }))}
+                              onKeyDown={e => { if (e.key === 'Enter') handleUpdateTranche(t.id); if (e.key === 'Escape') cancelEditTranche(t.id) }} />
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <input className="form-input" type="number" min="0" max="100" step="0.1"
+                                style={{ width: 70, padding: '3px 7px', fontSize: 13 }}
+                                value={ed.taux_pct}
+                                onChange={e => setEditTranche(prev => ({ ...prev, [t.id]: { ...prev[t.id], taux_pct: e.target.value } }))}
+                                onKeyDown={e => { if (e.key === 'Enter') handleUpdateTranche(t.id); if (e.key === 'Escape') cancelEditTranche(t.id) }}
+                                autoFocus />
+                              <span style={{ fontSize: 13 }}>%</span>
+                            </div>
+                          </td>
+                          {['membre', 'responsable', 'direction'].map(r => (
+                            <td key={r} style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                              {((parseFloat(ed.taux_pct) || 0) * (Number(multis[r]) || 1)).toFixed(1)}%
+                            </td>
+                          ))}
+                          <td>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-solid btn-sm" disabled={savingComm} onClick={() => handleUpdateTranche(t.id)}>✓</button>
+                              <button className="btn btn-or btn-sm" onClick={() => cancelEditTranche(t.id)}>✕</button>
+                            </div>
+                          </td>
+                        </>
                       ) : (
-                        <span
-                          style={{ cursor: 'pointer', borderBottom: '1px dashed var(--or-border)', paddingBottom: 1 }}
-                          title="Cliquer pour modifier"
-                          onClick={() => setEditTaux(prev => ({ ...prev, [t.id]: String(t.taux_pct) }))}
-                        >
-                          {t.taux_pct}% ✎
-                        </span>
+                        <>
+                          <td style={{ color: 'var(--texte-soft)', fontSize: 13 }}>{fmt(t.min_montant)}</td>
+                          <td style={{ color: 'var(--texte-soft)', fontSize: 13 }}>{t.max_montant !== null ? fmt(t.max_montant) : '∞'}</td>
+                          <td style={{ fontWeight: 600 }}>{t.taux_pct}%</td>
+                          {['membre', 'responsable', 'direction'].map(r => (
+                            <td key={r} style={{ color: 'var(--or)', fontWeight: 600 }}>
+                              {(t.taux_pct * (Number(multis[r]) || 1)).toFixed(1)}%
+                            </td>
+                          ))}
+                          <td>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-or btn-sm" onClick={() => startEditTranche(t)}>✎</button>
+                              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTranche(t.id)}>✕</button>
+                            </div>
+                          </td>
+                        </>
                       )}
-                    </td>
-                    {['membre', 'responsable', 'direction'].map(r => (
-                      <td key={r} style={{ color: 'var(--or)', fontWeight: 600 }}>
-                        {(t.taux_pct * (Number(multis[r]) || 1)).toFixed(1)}%
-                      </td>
-                    ))}
-                    <td>
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTranche(t.id)}>✕</button>
-                    </td>
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
                 {tranches.length === 0 && <tr><td colSpan={7} style={{ color: 'var(--texte-soft)', textAlign: 'center' }}>Aucune tranche configurée</td></tr>}
               </tbody>
             </table>
