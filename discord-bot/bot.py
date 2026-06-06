@@ -4,7 +4,7 @@ Bot Discord — Syndicat des Murmures (Python)
 Surveille les webhooks d'entrepôt, met à jour les stocks en base,
 logge chaque mouvement et rattrape les messages manqués au démarrage.
 """
-import os, re, logging, asyncio, requests
+import os, re, logging, asyncio, requests, unicodedata
 from datetime import datetime, timezone
 
 import discord
@@ -44,7 +44,7 @@ bot = discord.Client(intents=intents)
 # ── Regex : "**Yvan Keller** a déposé 54x Branche de cannabis" ───────────────
 DESC_RE = re.compile(r'^\*\*(.+)\*\* a (déposé|retiré) (\d+)x (.+)$')
 
-# ── Logs ──────────────────────────────────────────────────────────────────────
+# ── Envoi de logs / monitoring ────────────────────────────────────────────────
 async def send_log(emoji: str, msg: str):
     text = f"{emoji} {msg}"
     logger.info(text)
@@ -69,10 +69,33 @@ async def send_monitor(content: str, view: discord.ui.View = None):
         await send_log('⚠️', content)
 
 # ── Correspondance personnage ↔ membre ───────────────────────────────────────
+def strip_accents(s: str) -> str:
+    """Supprime les accents : Théo → Theo, Élodie → Elodie, etc."""
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', s)
+        if unicodedata.category(c) != 'Mn'
+    ).strip()
+
+async def _try_find(prenom: str, nom: str) -> dict | None:
+    """Tente une recherche ilike sur prenom+nom (dans cet ordre)."""
+    try:
+        r = await db(lambda: supabase.table('membres')
+            .select('id, surnom, prenom, nom')
+            .ilike('prenom', prenom)
+            .ilike('nom', nom)
+            .limit(1)
+            .execute())
+        if r and r.data:
+            return r.data[0]
+    except Exception:
+        pass
+    return None
+
 async def find_membre(nom_personnage: str) -> dict | None:
     """
-    Cherche un membre par nom de personnage (champs prenom + nom de la table membres).
-    Essaie les deux ordres possibles : "Prénom Nom" et "Nom Prénom".
+    Cherche un membre par nom de personnage (champs prenom + nom).
+    Essaie les deux ordres (Prénom Nom / Nom Prénom)
+    et les deux formes (avec / sans accents) pour chaque combinaison.
     Retourne le dict membre (id, surnom, prenom, nom) ou None.
     """
     parts = nom_personnage.strip().split(' ', 1)
@@ -80,32 +103,14 @@ async def find_membre(nom_personnage: str) -> dict | None:
         return None
 
     a, b = parts[0].strip(), parts[1].strip()
+    sa, sb = strip_accents(a), strip_accents(b)
 
-    # Ordre 1 : "Prénom Nom" → prenom=a, nom=b
-    try:
-        r = await db(lambda: supabase.table('membres')
-            .select('id, surnom, prenom, nom')
-            .ilike('prenom', a)
-            .ilike('nom', b)
-            .maybe_single()
-            .execute())
-        if r.data:
-            return r.data
-    except Exception:
-        pass
-
-    # Ordre 2 : "Nom Prénom" → prenom=b, nom=a
-    try:
-        r = await db(lambda: supabase.table('membres')
-            .select('id, surnom, prenom, nom')
-            .ilike('prenom', b)
-            .ilike('nom', a)
-            .maybe_single()
-            .execute())
-        if r.data:
-            return r.data
-    except Exception:
-        pass
+    # Toutes les combinaisons : ordre × accents
+    # On commence par la plus précise (avec accents) pour éviter de faux positifs
+    for prenom, nom in [(a, b), (b, a), (sa, sb), (sb, sa)]:
+        result = await _try_find(prenom, nom)
+        if result:
+            return result
 
     return None
 
@@ -114,6 +119,22 @@ def membre_label(membre: dict | None, fallback: str) -> str:
     if membre and membre.get('surnom'):
         return membre['surnom']
     return fallback
+
+# ── Déduplication ─────────────────────────────────────────────────────────────
+async def is_already_processed(message_id: str) -> bool:
+    """
+    Vérifie si ce message a déjà été traité (présent dans logs_mouvements).
+    Permet d'éviter le double traitement en cas de redémarrage du bot.
+    """
+    try:
+        r = await db(lambda: supabase.table('logs_mouvements')
+            .select('message_id')
+            .eq('message_id', message_id)
+            .limit(1)
+            .execute())
+        return bool(r and r.data)
+    except Exception:
+        return False  # En cas d'erreur DB, on laisse passer
 
 # ── Stock atomique (RPCs PostgreSQL) ─────────────────────────────────────────
 async def upsert_drogue_stock(coffre_id: str, drogue_id: str, delta: int):
@@ -159,7 +180,6 @@ async def insert_log(
             'is_recovery':    is_recovery,
         }).execute())
     except Exception as e:
-        # 23505 = unique_violation (message déjà traité) → ignoré silencieusement
         if '23505' not in str(e):
             logger.error(f"insert_log error: {e}")
 
@@ -169,9 +189,9 @@ async def get_last_message_id(channel_id: str) -> str | None:
         r = await db(lambda: supabase.table('bot_state')
             .select('last_message_id')
             .eq('channel_id', channel_id)
-            .maybe_single()
+            .limit(1)
             .execute())
-        return r.data['last_message_id'] if r.data else None
+        return r.data[0]['last_message_id'] if r and r.data else None
     except Exception:
         return None
 
@@ -186,6 +206,26 @@ async def save_last_message_id(channel_id: str, message_id: str):
         logger.error(f"save_state error: {e}")
 
 # ── Vues interactives (boutons + modals) ──────────────────────────────────────
+
+class RecapDetailView(discord.ui.View):
+    """Bouton 'Voir le détail' pour le récap de rattrapage."""
+    def __init__(self, lines: list):
+        super().__init__(timeout=600)
+        self.lines = lines
+
+    @discord.ui.button(label='📋 Voir le détail', style=discord.ButtonStyle.secondary)
+    async def show_detail(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not self.lines:
+            await interaction.response.send_message('Aucun détail disponible.', ephemeral=True)
+            return
+        # Discord message limit = 2000 chars, on tronque si nécessaire
+        detail_lines = self.lines[:80]
+        extra = len(self.lines) - len(detail_lines)
+        text = '\n'.join(detail_lines)
+        if extra > 0:
+            text += f'\n_...et {extra} autres actions_'
+        await interaction.response.send_message(text[:2000], ephemeral=True)
+
 
 class CoffreView(discord.ui.View):
     def __init__(self, lieu: str):
@@ -202,7 +242,7 @@ class CoffreView(discord.ui.View):
                 f'✅ Coffre **{self.lieu}** créé avec succès !', ephemeral=True)
         except Exception as e:
             await interaction.response.send_message(
-                f'🔴 Erreur : {e}', ephemeral=True)
+                f'Erreur : {e}', ephemeral=True)
 
 
 class ResourceView(discord.ui.View):
@@ -210,18 +250,18 @@ class ResourceView(discord.ui.View):
         super().__init__(timeout=None)
         self.nom = nom
 
-    @discord.ui.button(label='🌿 Créer comme drogue', style=discord.ButtonStyle.success)
+    @discord.ui.button(label='Créer comme drogue', style=discord.ButtonStyle.success)
     async def create_drogue(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(DrogueModal(self.nom))
 
-    @discord.ui.button(label='🔧 Créer comme consommable', style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label='Créer comme consommable', style=discord.ButtonStyle.secondary)
     async def create_conso(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ConsoModal(self.nom))
 
-    @discord.ui.button(label='✕ Ignorer', style=discord.ButtonStyle.danger)
+    @discord.ui.button(label='Ignorer', style=discord.ButtonStyle.danger)
     async def ignore(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(
-            f'✕ **{self.nom}** ignoré.', ephemeral=True)
+            f'**{self.nom}** ignoré.', ephemeral=True)
 
 
 class DrogueModal(discord.ui.Modal, title='Nouvelle drogue'):
@@ -245,7 +285,7 @@ class DrogueModal(discord.ui.Modal, title='Nouvelle drogue'):
             await interaction.response.send_message(
                 f'✅ Drogue **{nom}** ajoutée au catalogue !', ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f'🔴 Erreur : {e}', ephemeral=True)
+            await interaction.response.send_message(f'Erreur : {e}', ephemeral=True)
 
 
 class ConsoModal(discord.ui.Modal, title='Nouveau consommable'):
@@ -274,18 +314,26 @@ class ConsoModal(discord.ui.Modal, title='Nouveau consommable'):
             await interaction.response.send_message(
                 f'✅ Consommable **{nom}** ajouté au catalogue !', ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f'🔴 Erreur : {e}', ephemeral=True)
+            await interaction.response.send_message(f'Erreur : {e}', ephemeral=True)
+
 
 # ── Traitement d'un message ───────────────────────────────────────────────────
-async def process_message(message: discord.Message, is_recovery: bool = False):
+async def process_message(message: discord.Message, is_recovery: bool = False) -> str | None:
+    """
+    Traite un message webhook d'entrepôt.
+    - is_recovery=False : mode normal, envoie un log Discord pour chaque action.
+    - is_recovery=True  : mode rattrapage, ne spamme pas, retourne une ligne de résumé
+                          (str) si une action a été traitée, None sinon.
+    Retourne None dans tous les cas en mode normal.
+    """
     if not message.webhook_id:
-        return
+        return None
     if str(message.channel.id) not in CHANNEL_IDS:
-        return
+        return None
 
     embed = message.embeds[0] if message.embeds else None
     if not embed or not embed.title or not embed.description:
-        return
+        return None
 
     lieu  = embed.title.strip()
     match = DESC_RE.match(embed.description.strip())
@@ -293,7 +341,7 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
         if not is_recovery:
             await send_log('❓', f'Format non reconnu : "{embed.description}"')
         await save_last_message_id(str(message.channel.id), str(message.id))
-        return
+        return None
 
     personnage_nom, action_fr, qte_str, ressource = match.groups()
     quantite = int(qte_str)
@@ -301,24 +349,28 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
     action   = 'ajout' if action_fr == 'déposé' else 'retrait'
     signe    = f'+{quantite}' if action == 'ajout' else f'-{quantite}'
 
+    # ── Déduplication : ce message a-t-il déjà été traité ? ───────────────────
+    if await is_already_processed(str(message.id)):
+        logger.info(f"Message {message.id} déjà traité, ignoré.")
+        await save_last_message_id(str(message.channel.id), str(message.id))
+        return None
+
     # ── Cherche le coffre ──────────────────────────────────────────────────────
     try:
         r = await db(lambda: supabase.table('coffres')
             .select('id, lieu').ilike('lieu', lieu).limit(1).execute())
-        coffre = (r.data[0] if r and r.data else None) if r is not None else None
+        coffre = r.data[0] if r and r.data else None
     except Exception as e:
         logger.error(f'Erreur lookup coffre "{lieu}": {e}')
-        return
+        return None
 
     if not coffre:
         if not is_recovery:
             await send_monitor(
-                f'⚠️ Lieu inconnu : **{lieu}** — introuvable en base',
+                f'Lieu inconnu : **{lieu}** — introuvable en base',
                 CoffreView(lieu))
-        else:
-            await send_log('❓', f'[Rattrapage] Lieu inconnu : **{lieu}**')
         await save_last_message_id(str(message.channel.id), str(message.id))
-        return
+        return None
 
     # ── Cherche le membre via nom de personnage ────────────────────────────────
     membre = await find_membre(personnage_nom)
@@ -328,7 +380,7 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
     try:
         r = await db(lambda: supabase.table('drogues')
             .select('id, nom').ilike('nom', ressource.strip()).limit(1).execute())
-        drogue = (r.data[0] if r and r.data else None) if r is not None else None
+        drogue = r.data[0] if r and r.data else None
     except Exception as e:
         logger.error(f'Erreur lookup drogue "{ressource}": {e}')
         drogue = None
@@ -337,16 +389,17 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
         await upsert_drogue_stock(coffre['id'], drogue['id'], delta)
         await insert_log(str(message.id), action, quantite, drogue['nom'], 'drogue',
                          coffre['id'], coffre['lieu'], personnage_nom, membre, is_recovery)
-        prefix = '[Rattrapage] ' if is_recovery else ''
-        await send_log('📦', f'{prefix}**{pseudo}** {action} {quantite}x {drogue["nom"]} → {coffre["lieu"]} ({signe})')
         await save_last_message_id(str(message.channel.id), str(message.id))
-        return
+        line = f'📦 **{pseudo}** {action} {quantite}x {drogue["nom"]} → {coffre["lieu"]} ({signe})'
+        if not is_recovery:
+            await send_log('📦', f'**{pseudo}** {action} {quantite}x {drogue["nom"]} → {coffre["lieu"]} ({signe})')
+        return line if is_recovery else None
 
     # ── Cherche dans consommables ──────────────────────────────────────────────
     try:
         r = await db(lambda: supabase.table('consommables')
             .select('id, nom').ilike('nom', ressource.strip()).limit(1).execute())
-        conso = (r.data[0] if r and r.data else None) if r is not None else None
+        conso = r.data[0] if r and r.data else None
     except Exception as e:
         logger.error(f'Erreur lookup conso "{ressource}": {e}')
         conso = None
@@ -355,29 +408,32 @@ async def process_message(message: discord.Message, is_recovery: bool = False):
         await upsert_conso_stock(coffre['id'], conso['id'], delta)
         await insert_log(str(message.id), action, quantite, conso['nom'], 'consommable',
                          coffre['id'], coffre['lieu'], personnage_nom, membre, is_recovery)
-        prefix = '[Rattrapage] ' if is_recovery else ''
-        await send_log('🔧', f'{prefix}**{pseudo}** {action} {quantite}x {conso["nom"]} → {coffre["lieu"]} ({signe})')
         await save_last_message_id(str(message.channel.id), str(message.id))
-        return
+        line = f'🔧 **{pseudo}** {action} {quantite}x {conso["nom"]} → {coffre["lieu"]} ({signe})'
+        if not is_recovery:
+            await send_log('🔧', f'**{pseudo}** {action} {quantite}x {conso["nom"]} → {coffre["lieu"]} ({signe})')
+        return line if is_recovery else None
 
     # ── Ressource inconnue ─────────────────────────────────────────────────────
     if not is_recovery:
         await send_monitor(
-            f'⚠️ Ressource inconnue : **{ressource.strip()}** — que faire ?',
+            f'Ressource inconnue : **{ressource.strip()}** — que faire ?',
             ResourceView(ressource.strip()[:80]))
-    else:
-        await send_log('❓', f'[Rattrapage] Ressource inconnue : **{ressource.strip()}**')
-
     await save_last_message_id(str(message.channel.id), str(message.id))
+    return None
+
 
 # ── Événements Discord ────────────────────────────────────────────────────────
 
 @bot.event
 async def on_ready():
     logger.info(f'Bot connecté : {bot.user} (id={bot.user.id})')
-    await send_log('✅', f'**Bot Murmures (Python)** démarré — {len(CHANNEL_IDS)} channel(s) surveillé(s)')
+    await send_log('✅', f'**Bot Murmures** démarré — {len(CHANNEL_IDS)} channel(s) surveillé(s)')
 
     # ── Récupération des messages manqués ──────────────────────────────────────
+    total_actions = 0
+    all_recap_lines = []
+
     for cid in CHANNEL_IDS:
         try:
             channel = bot.get_channel(int(cid)) or await bot.fetch_channel(int(cid))
@@ -388,18 +444,33 @@ async def on_ready():
         last_id = await get_last_message_id(cid)
         after   = discord.Object(id=int(last_id)) if last_id else None
 
-        count = 0
+        chan_lines = []
         try:
             async for msg in channel.history(limit=500, after=after, oldest_first=True):
-                await process_message(msg, is_recovery=True)
-                count += 1
+                result = await process_message(msg, is_recovery=True)
+                if result:
+                    chan_lines.append(result)
         except Exception as e:
             logger.error(f'Erreur historique channel {cid}: {e}')
 
-        if count > 0:
-            await send_log('🔄', f'Rattrapage : **{count}** message(s) traité(s) sur <#{cid}>')
+        if chan_lines:
+            total_actions += len(chan_lines)
+            # Préfixe chaque ligne avec le nom du channel pour le récap global
+            for line in chan_lines:
+                all_recap_lines.append(f'<#{cid}> {line}')
+            logger.info(f'Channel {cid} : {len(chan_lines)} action(s) rattrapée(s)')
         else:
             logger.info(f'Channel {cid} : aucun message manqué')
+
+    # ── Envoi d'un récap global unique ────────────────────────────────────────
+    if total_actions > 0:
+        view = RecapDetailView(all_recap_lines)
+        await send_monitor(
+            f'Rattrapage : **{total_actions} action(s) traitée(s)**',
+            view=view
+        )
+    else:
+        logger.info('Rattrapage : aucune action manquée')
 
 
 @bot.event

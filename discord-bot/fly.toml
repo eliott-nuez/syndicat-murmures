@@ -1,0 +1,9 @@
+[build]
+
+app = "sdm-stock-bot"
+primary_region = "cdg"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
