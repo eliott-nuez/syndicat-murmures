@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
+import { getRangEffectif } from '../utils/viewAs'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -16,7 +17,8 @@ function localNow() {
 }
 
 export default function FichePerso() {
-  const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  const membre      = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  const rangEffectif = getRangEffectif() || membre.rang || 'membre'
 
   const PRIX_VENTE_BRANCHE = 70
 
@@ -77,7 +79,7 @@ export default function FichePerso() {
     fetchPlantationsSemaine()
     chargerParamsCommission().then(setCommissionParams)
     supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBranche(data))
-    if (['responsable','direction'].includes(membre.rang)) {
+    if (['responsable','direction'].includes(getRangEffectif() || membre.rang)) {
       supabase.from('membres').select('id, surnom, rang').order('surnom').then(({ data }) => setMembresListe(data || []))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -316,7 +318,7 @@ export default function FichePerso() {
     }
   }
 
-  const calc = calculerCommission(activites, ventes, membre.rang, commissionParams, plantations)
+  const calc = calculerCommission(activites, ventes, rangEffectif, commissionParams, plantations)
   const {
     totalActBrut, cambriolageTotal, deductionBoitiers,
     totalPrixTotal, totalBenefice, totalSaisies, totalPlantations,
@@ -659,7 +661,7 @@ export default function FichePerso() {
             )}
             <form onSubmit={handleSubmitPlantation}>
               <div className="grid-2" style={{ gap: 16, marginBottom: 16 }}>
-                {['responsable','direction'].includes(membre.rang) && (
+                {['responsable','direction'].includes(rangEffectif) && (
                   <div className="form-group">
                     <label className="form-label">Membre</label>
                     <select className="form-select" value={formPlant.membre_id}

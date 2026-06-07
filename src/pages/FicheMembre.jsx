@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
-
-const viewer = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+import { getRangEffectif } from '../utils/viewAs'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -18,6 +17,9 @@ function localNow() {
 }
 
 export default function FicheMembre() {
+  const _stored  = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  const viewer   = { ..._stored, rang: getRangEffectif() || _stored.rang || 'membre' }
+
   const [membres, setMembres]     = useState([])
   const [membreId, setMembreId]   = useState('')
   const membre                    = membres.find(m => m.id === membreId) || null

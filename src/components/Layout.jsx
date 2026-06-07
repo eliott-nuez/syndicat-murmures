@@ -1,6 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { useInactivityLogout } from '../hooks/useInactivityLogout'
+import { getRangReel, getRangEffectif, getViewAsActif, activerViewAs, desactiverViewAs } from '../utils/viewAs'
 
 // ── Icônes SVG ────────────────────────────────────────────────────────────────
 
@@ -163,12 +165,33 @@ const NAV_DIRECTION = [
 // ── Layout ─────────────────────────────────────────────────────────────────
 
 export default function Layout({ children }) {
-  const navigate = useNavigate()
-  const membre   = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  const navigate  = useNavigate()
+  const membre    = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   useInactivityLogout()
-  const rang = membre.rang || 'membre'
+
+  const rangReel = getRangReel() || membre.rang || 'membre'
+  const [viewAs, setViewAs] = useState(getViewAsActif)
+
+  // Écoute les changements de simulation (même onglet)
+  useEffect(() => {
+    const handler = () => setViewAs(getViewAsActif())
+    window.addEventListener('sdm_view_as_change', handler)
+    return () => window.removeEventListener('sdm_view_as_change', handler)
+  }, [])
+
+  const rang         = viewAs || rangReel   // rang effectif pour la nav
+  const isDirection  = rangReel === 'direction'
+  const isResponsable = ['responsable', 'direction'].includes(rang)
+  const isDir         = rang === 'direction'
+  const isFamilles    = rang === 'familles'
+
+  const handleViewAs = (val) => {
+    if (val === 'direction') { desactiverViewAs(); setViewAs(null) }
+    else { activerViewAs(val); setViewAs(val) }
+  }
 
   const handleLogout = async () => {
+    desactiverViewAs()
     const stored = localStorage.getItem('sdm_membre')
     if (stored) {
       const m = JSON.parse(stored)
@@ -179,88 +202,138 @@ export default function Layout({ children }) {
     navigate('/')
   }
 
-  const isResponsable = ['responsable', 'direction'].includes(rang)
-  const isDirection   = rang === 'direction'
-  const isFamilles    = rang === 'familles'
-
   const navItems = isFamilles
     ? [{ to: '/contrats-familles', label: 'Contrats', icon: <IcoContrats /> }]
     : [
         ...NAV_TOUS,
         ...(isResponsable ? NAV_RESPONSABLE : []),
-        ...(isDirection   ? NAV_DIRECTION   : []),
+        ...(isDir         ? NAV_DIRECTION   : []),
       ]
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* ── Sidebar ── */}
-      <aside style={{
-        width: 220,
-        flexShrink: 0,
-        background: 'var(--noir-card)',
-        borderRight: '1px solid var(--or-border)',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '28px 0',
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
-      }}>
-        {/* Logo */}
-        <div style={{ padding: '0 24px 28px', borderBottom: '1px solid var(--or-border)' }}>
-          <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.2em', color: 'var(--or)', marginBottom: 4 }}>
-            Le Syndicat
-          </div>
-          <div style={{ fontFamily: 'var(--font-titre)', fontSize: 13, letterSpacing: '0.15em', color: 'var(--or-pale)' }}>
-            des Murmures
-          </div>
-          <div style={{ marginTop: 10, fontSize: 10, color: 'var(--texte-soft)', letterSpacing: '0.1em' }}>
-            {membre.surnom}
-            <span style={{
-              marginLeft: 8, padding: '2px 7px',
-              background: 'var(--or-glow)', border: '1px solid var(--or-border)',
-              borderRadius: 10, fontSize: 9, color: 'var(--or)',
-              letterSpacing: '0.12em', textTransform: 'uppercase',
-            }}>{rang}</span>
-          </div>
-        </div>
+    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {navItems.map(item => (
-            <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '10px 24px',
-              fontSize: 12,
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              fontWeight: 500,
-              color: isActive ? 'var(--or-pale)' : 'rgba(201,168,76,0.52)',
-              background: isActive ? 'var(--or-glow)' : 'transparent',
-              borderRight: isActive ? '2px solid var(--or)' : '2px solid transparent',
-              transition: 'var(--transition)',
-              textDecoration: 'none',
-            })}>
-              {item.icon}
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Logout */}
-        <div style={{ padding: '0 16px' }}>
-          <button onClick={handleLogout} className="btn btn-danger" style={{ width: '100%', justifyContent: 'center' }}>
-            ⎋ Déconnexion
+      {/* ── Bandeau simulation ── */}
+      {viewAs && (
+        <div style={{
+          background: 'linear-gradient(90deg, #3a2a08, #2a1e04)',
+          borderBottom: '1px solid var(--or)',
+          padding: '7px 24px',
+          display: 'flex', alignItems: 'center', gap: 14,
+          fontSize: 12, color: 'var(--or-pale)',
+          letterSpacing: '0.08em', zIndex: 100,
+        }}>
+          <span style={{ opacity: 0.7 }}>👁</span>
+          <span>Vue simulée — <strong style={{ color: 'var(--or)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{viewAs}</strong></span>
+          <button
+            onClick={() => handleViewAs('direction')}
+            style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid var(--or-border)', color: 'var(--or)', borderRadius: 6, padding: '3px 12px', fontSize: 11, cursor: 'pointer', letterSpacing: '0.1em' }}>
+            ✕ Revenir en direction
           </button>
         </div>
-      </aside>
+      )}
 
-      {/* ── Contenu ── */}
-      <main style={{ flex: 1, padding: '36px 40px', minWidth: 0 }}>
-        {children}
-      </main>
+      <div style={{ display: 'flex', flex: 1 }}>
+        {/* ── Sidebar ── */}
+        <aside style={{
+          width: 220,
+          flexShrink: 0,
+          background: 'var(--noir-card)',
+          borderRight: '1px solid var(--or-border)',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '28px 0',
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+        }}>
+          {/* Logo */}
+          <div style={{ padding: '0 24px 28px', borderBottom: '1px solid var(--or-border)' }}>
+            <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.2em', color: 'var(--or)', marginBottom: 4 }}>
+              Le Syndicat
+            </div>
+            <div style={{ fontFamily: 'var(--font-titre)', fontSize: 13, letterSpacing: '0.15em', color: 'var(--or-pale)' }}>
+              des Murmures
+            </div>
+            <div style={{ marginTop: 10, fontSize: 10, color: 'var(--texte-soft)', letterSpacing: '0.1em' }}>
+              {membre.surnom}
+              <span style={{
+                marginLeft: 8, padding: '2px 7px',
+                background: 'var(--or-glow)', border: '1px solid var(--or-border)',
+                borderRadius: 10, fontSize: 9, color: 'var(--or)',
+                letterSpacing: '0.12em', textTransform: 'uppercase',
+              }}>{rang}</span>
+            </div>
+          </div>
+
+          {/* Sélecteur "Vue simulée" — direction uniquement */}
+          {isDirection && (
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--or-border)' }}>
+              <div style={{ fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--texte-soft)', marginBottom: 6 }}>
+                Voir en tant que
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['membre', 'responsable', 'direction'].map(r => (
+                  <button key={r}
+                    onClick={() => handleViewAs(r)}
+                    style={{
+                      flex: 1,
+                      padding: '4px 2px',
+                      fontSize: 9,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      borderRadius: 5,
+                      border: '1px solid var(--or-border)',
+                      background: (viewAs || 'direction') === r ? 'var(--or-glow)' : 'transparent',
+                      color: (viewAs || 'direction') === r ? 'var(--or)' : 'rgba(201,168,76,0.45)',
+                      fontWeight: (viewAs || 'direction') === r ? 700 : 400,
+                      transition: 'var(--transition)',
+                    }}>
+                    {r === 'direction' ? 'Dir.' : r === 'responsable' ? 'Resp.' : 'Mbr.'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Nav */}
+          <nav style={{ flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {navItems.map(item => (
+              <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 24px',
+                fontSize: 12,
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+                color: isActive ? 'var(--or-pale)' : 'rgba(201,168,76,0.52)',
+                background: isActive ? 'var(--or-glow)' : 'transparent',
+                borderRight: isActive ? '2px solid var(--or)' : '2px solid transparent',
+                transition: 'var(--transition)',
+                textDecoration: 'none',
+              })}>
+                {item.icon}
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          {/* Logout */}
+          <div style={{ padding: '0 16px' }}>
+            <button onClick={handleLogout} className="btn btn-danger" style={{ width: '100%', justifyContent: 'center' }}>
+              ⎋ Déconnexion
+            </button>
+          </div>
+        </aside>
+
+        {/* ── Contenu ── */}
+        <main style={{ flex: 1, padding: '36px 40px', minWidth: 0 }}>
+          {children}
+        </main>
+      </div>
     </div>
   )
 }
