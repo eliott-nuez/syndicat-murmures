@@ -6,6 +6,7 @@ import LandingPage    from './pages/LandingPage'
 import LoginPage      from './pages/LoginPage'
 import Dashboard      from './pages/Dashboard'
 import FichePerso     from './pages/FichePerso'
+import ActiviteGroupe from './pages/ActiviteGroupe'
 import RecapGlobal    from './pages/RecapGlobal'
 import Stock          from './pages/Stock'
 import Tricount       from './pages/Tricount'
@@ -38,6 +39,7 @@ export default function App() {
         {/* Tous membres connectés */}
         <Route path="/dashboard"   element={<AppLayout><Dashboard /></AppLayout>} />
         <Route path="/fiche"       element={<AppLayout><FichePerso /></AppLayout>} />
+        <Route path="/activite-groupe" element={<AppLayout><ActiviteGroupe /></AppLayout>} />
         <Route path="/calendrier"  element={<AppLayout><Calendrier /></AppLayout>} />
 
         {/* Familles + Responsable + Direction */}

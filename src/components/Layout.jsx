@@ -31,6 +31,15 @@ const IcoFichePerso = () => (
   </Ico>
 )
 
+/** Activités de groupe — Coffre-fort / braquage collectif */
+const IcoActiviteGroupe = () => (
+  <Ico>
+    <rect x="4" y="10" width="16" height="10" rx="1.5"/>
+    <circle cx="12" cy="15" r="2"/>
+    <path d="M7 10V7Q7 4 12 4Q17 4 17 7V10"/>
+  </Ico>
+)
+
 /** Calendrier — Parchemin avec lignes */
 const IcoCalendrier = () => (
   <Ico>
@@ -144,9 +153,10 @@ const IcoAdmin = () => (
 // ── Navigation ─────────────────────────────────────────────────────────────
 
 const NAV_TOUS = [
-  { to: '/dashboard',  label: 'Dashboard',      icon: <IcoDashboard /> },
-  { to: '/fiche',      label: 'Ma fiche perso',  icon: <IcoFichePerso /> },
-  { to: '/calendrier', label: 'Calendrier',      icon: <IcoCalendrier /> },
+  { to: '/dashboard',        label: 'Dashboard',           icon: <IcoDashboard /> },
+  { to: '/fiche',            label: 'Ma fiche perso',       icon: <IcoFichePerso /> },
+  { to: '/activite-groupe',  label: 'Activités de groupe',  icon: <IcoActiviteGroupe /> },
+  { to: '/calendrier',       label: 'Calendrier',           icon: <IcoCalendrier /> },
 ]
 const NAV_RESPONSABLE = [
   { to: '/recap-global',      label: 'Comptabilité',      icon: <IcoComptabilite /> },

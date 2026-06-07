@@ -43,10 +43,11 @@ export default function Dashboard() {
   const membre      = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const isDirection = membre.rang === 'direction'
 
-  const [dispos, setDispos]         = useState({})
-  const [totauxGang, setTotauxGang] = useState(null)
-  const [connectes, setConnectes]   = useState('—')
-  const [loading, setLoading]       = useState(true)
+  const [dispos, setDispos]             = useState({})
+  const [groupeActs, setGroupeActs]     = useState([])
+  const [totauxGang, setTotauxGang]     = useState(null)
+  const [connectes, setConnectes]       = useState('—')
+  const [loading, setLoading]           = useState(true)
   // now sert à forcer le re-render toutes les minutes pour rafraichir les timers
   const [, setNow]                  = useState(new Date())
 
@@ -79,6 +80,13 @@ export default function Dashboard() {
       dispoMap[type] = data || null
     }
     setDispos(dispoMap)
+
+    // Activités de groupe de la semaine (Fleeca / Ammunation)
+    const { data: ag } = await supabase
+      .from('activites_groupe')
+      .select('type_code, participants, created_at')
+      .gte('created_at', getDebutSemaine().toISOString())
+    setGroupeActs(ag || [])
 
     // Membres connectes (actif = true)
     const { count } = await supabase
@@ -189,6 +197,32 @@ export default function Dashboard() {
               </div>
             )
           })}
+
+          {/* Activités de groupe — Fleeca & Ammunation */}
+          <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--or-border)' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--or)', marginBottom: 10 }}>
+              Activités de groupe
+            </div>
+            {['Fleeca', 'Ammunation'].map(t => {
+              const acts          = groupeActs.filter(a => a.type_code === t)
+              const groupeBloque  = acts.length >= 2
+              const dejaParticipe = acts.some(a => (a.participants || []).some(p => p.membre_id === membre.id))
+              const dispo         = !groupeBloque && !dejaParticipe
+              return (
+                <div key={t} className="dispo-item">
+                  <div>
+                    <div className="dispo-name">{t}</div>
+                    <div style={{ fontSize: 11, color: 'var(--texte-soft)', marginTop: 2 }}>
+                      Groupe : {acts.length} / 2 cette semaine
+                    </div>
+                  </div>
+                  <div className={`dispo-time ${dispo ? 'dispo-ok' : 'dispo-wait'}`}>
+                    {dispo ? '✓ Disponible' : groupeBloque ? '✗ Limite groupe' : '✗ Déjà fait'}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
 
         {/* Recap rapide semaine */}
