@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { useInactivityLogout } from '../hooks/useInactivityLogout'
@@ -127,6 +127,23 @@ const IcoComptabilite = () => (
   </Ico>
 )
 
+/** Finance — pile de pièces */
+const IcoFinance = () => (
+  <Ico>
+    <ellipse cx="12" cy="6" rx="7" ry="3"/>
+    <path d="M5 6v5q0 3 7 3t7-3V6"/>
+    <path d="M5 11v5q0 3 7 3t7-3v-5"/>
+  </Ico>
+)
+
+/** Petit chevron pour ouvrir/fermer un sous-menu */
+const IcoChevron = ({ open }) => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"
+       style={{ marginLeft: 'auto', transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'var(--transition)' }}>
+    <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
 /** Contrats Familles — Calendrier avec coche */
 const IcoContrats = () => (
   <Ico>
@@ -154,22 +171,26 @@ const IcoAdmin = () => (
 
 const NAV_TOUS = [
   { to: '/dashboard',        label: 'Dashboard',           icon: <IcoDashboard /> },
-  { to: '/fiche',            label: 'Ma fiche perso',       icon: <IcoFichePerso /> },
-  { to: '/activite-groupe',  label: 'Activités de groupe',  icon: <IcoActiviteGroupe /> },
   { to: '/calendrier',       label: 'Calendrier',           icon: <IcoCalendrier /> },
 ]
 const NAV_RESPONSABLE = [
-  { to: '/recap-global',      label: 'Comptabilité',      icon: <IcoComptabilite /> },
   { to: '/stock',             label: 'Stock & Catalogue',  icon: <IcoStock /> },
   { to: '/logs',              label: 'Logs mouvements',    icon: <IcoLogs /> },
-  { to: '/ventes-groupe',     label: 'Ventes groupe',      icon: <IcoVentes /> },
   { to: '/contrats-familles', label: 'Contrats Familles',  icon: <IcoContrats /> },
 ]
 const NAV_DIRECTION = [
-  { to: '/fiche-membre', label: 'Fiche membre',   icon: <IcoFicheMembre /> },
-  { to: '/tricount',     label: 'Tricount',        icon: <IcoTricount /> },
-  { to: '/blanchiment',  label: 'Blanchiment',     icon: <IcoBlanchiment /> },
-  { to: '/admin',        label: 'Administration',  icon: <IcoAdmin /> },
+  { to: '/admin', label: 'Administration', icon: <IcoAdmin /> },
+]
+
+// Sous-menu "Finance" — regroupe les pages liées à l'argent / fiches
+const FINANCE_ITEMS = [
+  { to: '/fiche',            label: 'Ma fiche perso',      icon: <IcoFichePerso />,      roles: ['membre', 'responsable', 'direction'] },
+  { to: '/activite-groupe',  label: 'Activités de groupe', icon: <IcoActiviteGroupe />,  roles: ['membre', 'responsable', 'direction'] },
+  { to: '/fiche-membre',     label: 'Fiche membre',        icon: <IcoFicheMembre />,     roles: ['direction'] },
+  { to: '/ventes-groupe',    label: 'Ventes groupe',       icon: <IcoVentes />,          roles: ['responsable', 'direction'] },
+  { to: '/recap-global',     label: 'Comptabilité',        icon: <IcoComptabilite />,    roles: ['responsable', 'direction'] },
+  { to: '/blanchiment',      label: 'Blanchiment',         icon: <IcoBlanchiment />,     roles: ['direction'] },
+  { to: '/tricount',         label: 'Tricount',            icon: <IcoTricount />,        roles: ['direction'] },
 ]
 
 // ── Layout ─────────────────────────────────────────────────────────────────
@@ -212,13 +233,29 @@ export default function Layout({ children }) {
     navigate('/')
   }
 
+  const financeChildren = FINANCE_ITEMS.filter(item => item.roles.includes(rang))
+
   const navItems = isFamilles
     ? [{ to: '/contrats-familles', label: 'Contrats', icon: <IcoContrats /> }]
     : [
         ...NAV_TOUS,
+        ...(financeChildren.length > 0
+          ? [{ group: 'finance', label: 'Finance', icon: <IcoFinance />, children: financeChildren }]
+          : []),
         ...(isResponsable ? NAV_RESPONSABLE : []),
         ...(isDir         ? NAV_DIRECTION   : []),
       ]
+
+  const location = useLocation()
+  const isChildActive = (children) => children.some(c => location.pathname.startsWith(c.to))
+  const [openGroup, setOpenGroup] = useState(null)
+
+  // Ouvre automatiquement le groupe contenant la page active
+  useEffect(() => {
+    const activeGroup = navItems.find(it => it.group && isChildActive(it.children))
+    if (activeGroup) setOpenGroup(activeGroup.group)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, rang])
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column' }}>
@@ -309,26 +346,85 @@ export default function Layout({ children }) {
 
           {/* Nav */}
           <nav style={{ flex: 1, padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {navItems.map(item => (
-              <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '10px 24px',
-                fontSize: 12,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                fontWeight: 500,
-                color: isActive ? 'var(--or-pale)' : 'rgba(201,168,76,0.52)',
-                background: isActive ? 'var(--or-glow)' : 'transparent',
-                borderRight: isActive ? '2px solid var(--or)' : '2px solid transparent',
-                transition: 'var(--transition)',
-                textDecoration: 'none',
-              })}>
-                {item.icon}
-                {item.label}
-              </NavLink>
-            ))}
+            {navItems.map(item => {
+              if (item.group) {
+                const open   = openGroup === item.group
+                const active = isChildActive(item.children)
+                return (
+                  <div key={item.group}>
+                    <button
+                      onClick={() => setOpenGroup(open ? null : item.group)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        width: '100%',
+                        padding: '10px 24px',
+                        fontSize: 12,
+                        letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        fontWeight: 500,
+                        color: active ? 'var(--or-pale)' : 'rgba(201,168,76,0.52)',
+                        background: active ? 'var(--or-glow)' : 'transparent',
+                        borderRight: active ? '2px solid var(--or)' : '2px solid transparent',
+                        border: 'none',
+                        borderRightWidth: 2,
+                        cursor: 'pointer',
+                        transition: 'var(--transition)',
+                        textAlign: 'left',
+                      }}>
+                      {item.icon}
+                      {item.label}
+                      <IcoChevron open={open} />
+                    </button>
+                    {open && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        {item.children.map(sub => (
+                          <NavLink key={sub.to} to={sub.to} style={({ isActive }) => ({
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '9px 24px 9px 44px',
+                            fontSize: 11.5,
+                            letterSpacing: '0.1em',
+                            textTransform: 'uppercase',
+                            fontWeight: 500,
+                            color: isActive ? 'var(--or-pale)' : 'rgba(201,168,76,0.42)',
+                            background: isActive ? 'var(--or-glow)' : 'transparent',
+                            borderRight: isActive ? '2px solid var(--or)' : '2px solid transparent',
+                            transition: 'var(--transition)',
+                            textDecoration: 'none',
+                          })}>
+                            {sub.icon}
+                            {sub.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+              return (
+                <NavLink key={item.to} to={item.to} style={({ isActive }) => ({
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 24px',
+                  fontSize: 12,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  fontWeight: 500,
+                  color: isActive ? 'var(--or-pale)' : 'rgba(201,168,76,0.52)',
+                  background: isActive ? 'var(--or-glow)' : 'transparent',
+                  borderRight: isActive ? '2px solid var(--or)' : '2px solid transparent',
+                  transition: 'var(--transition)',
+                  textDecoration: 'none',
+                })}>
+                  {item.icon}
+                  {item.label}
+                </NavLink>
+              )
+            })}
           </nav>
 
           {/* Logout */}
