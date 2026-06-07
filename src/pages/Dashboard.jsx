@@ -215,12 +215,17 @@ function RecapSemaineMini({ membreId }) {
       const [commParams, { data: activites }, { data: ventes }, { data: plants }] = await Promise.all([
         chargerParamsCommission(),
         supabase.from('activites').select('somme_argent_sale, type_code').eq('membre_id', membreId).gte('heure_faite', debutStr),
-        supabase.from('ventes_drogue').select('argent_sale, prix_total, statut').eq('membre_id', membreId).gte('created_at', getDebutSemaine().toISOString()),
-        supabase.from('plantations').select('benefice').eq('membre_id', membreId).gte('date_plantation', debutStr),
+        supabase.from('ventes_drogue').select('argent_sale, prix_total, statut, quantite').eq('membre_id', membreId).gte('created_at', getDebutSemaine().toISOString()),
+        supabase.from('plantations').select('benefice, nb_branches').eq('membre_id', membreId).gte('date_plantation', debutStr),
       ])
 
       const calc = calculerCommission(activites || [], ventes || [], membre.rang, commParams, plants || [])
-      setRecap(calc)
+      setRecap({
+        ...calc,
+        nbActions:  (activites || []).length,
+        nbBranches: (plants    || []).reduce((s, p) => s + (p.nb_branches || 0), 0),
+        nbUnites:   (ventes    || []).filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.quantite || 0), 0),
+      })
     }
     fetchRecap()
   }, [membreId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -230,10 +235,50 @@ function RecapSemaineMini({ membreId }) {
 
   if (!recap) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
 
-  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, totalPlantations, base, multiplicateur, commission_pct, commission, net, tranches_detail } = recap
+  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, totalPlantations, base, multiplicateur, commission_pct, commission, net, tranches_detail, nbActions, nbBranches, nbUnites } = recap
+
+  const QUOTA_ACTIONS  = 20
+  const QUOTA_BRANCHES = 2000
+  const QUOTA_UNITES   = 300
+
+  const Jauge = ({ label, valeur, objectif, suffixe = '' }) => {
+    const pct = Math.min(100, Math.round((valeur / objectif) * 100))
+    const ok  = valeur >= objectif
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+          <span style={{ color: 'var(--texte-soft)' }}>{label}</span>
+          <span style={{ color: ok ? '#5cba8a' : 'var(--or-pale)', fontWeight: 600 }}>
+            {valeur.toLocaleString('fr-FR')} / {objectif.toLocaleString('fr-FR')}{suffixe}{ok ? '  ✓' : ''}
+          </span>
+        </div>
+        <div style={{ height: 8, borderRadius: 5, background: 'rgba(201,168,76,0.12)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${pct}%`, borderRadius: 5,
+            background: ok ? 'linear-gradient(90deg,#3f8f66,#5cba8a)' : 'linear-gradient(90deg,#9c7d2e,#e8c97a)',
+            transition: 'width 0.5s ease',
+          }} />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+      {/* Quotas hebdomadaires */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 14,
+        marginBottom: 6, padding: '14px 16px',
+        background: 'rgba(201,168,76,0.05)', border: '1px solid var(--or-border)', borderRadius: 8,
+      }}>
+        <div style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--or)' }}>
+          Quotas de la semaine
+        </div>
+        <Jauge label="Actions effectuées"  valeur={nbActions}  objectif={QUOTA_ACTIONS} />
+        <Jauge label="Branches récoltées"  valeur={nbBranches} objectif={QUOTA_BRANCHES} />
+        <Jauge label="Drogues vendues"     valeur={nbUnites}   objectif={QUOTA_UNITES} suffixe=" unités" />
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <span style={{ color: 'var(--texte-soft)' }}>Activités (hors cambriolage)</span>
         <span>{fmt(totalActBrut)}</span>
