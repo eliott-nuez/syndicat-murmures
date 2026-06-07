@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { useInactivityLogout } from '../hooks/useInactivityLogout'
-import { getRangReel, getRangEffectif, getViewAsActif, activerViewAs, desactiverViewAs } from '../utils/viewAs'
+import { getRangReel, getViewAsActif, activerViewAs, desactiverViewAs } from '../utils/viewAs'
 
 // ── Icônes SVG ────────────────────────────────────────────────────────────────
 
