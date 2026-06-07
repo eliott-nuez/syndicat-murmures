@@ -705,100 +705,101 @@ export default function FichePerso() {
                 {savingPlant ? 'Enregistrement...' : '+ Valider la récolte'}
               </button>
             </form>
+
+            {plantations.length > 0 && (
+              <div style={{ marginTop: 24 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--texte-soft)' }}>
+                    Historique ({plantations.length})
+                  </div>
+                  {plantations.length > 5 && (
+                    <button className="btn btn-or btn-sm" style={{ fontSize: 11 }} onClick={() => setShowAllPlants(v => !v)}>
+                      {showAllPlants ? 'Afficher moins' : `Afficher plus (${plantations.length - 5} de plus)`}
+                    </button>
+                  )}
+                </div>
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>Date</th><th>Pots</th><th>Branches</th><th>Moy/pot</th><th>Bénéfice</th><th>Note</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {(showAllPlants ? plantations : plantations.slice(0, 5)).map(p => {
+                        const isEditing = editPlantId === p.id
+                        const moy = p.nb_pots > 0 ? Math.round(p.nb_branches / p.nb_pots) : 0
+                        const couleur = moy >= 8 ? '#4caf7d' : moy === 7 ? '#e8a84c' : '#e05555'
+                        if (isEditing) {
+                          const epots = parseInt(editPlantForm.nb_pots) || 0
+                          const ebranches = parseInt(editPlantForm.nb_branches) || 0
+                          const emoy = epots > 0 && ebranches > 0 ? Math.round(ebranches / epots) : null
+                          const ebenef = branche && ebranches > 0 ? ebranches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : null
+                          return (
+                            <tr key={p.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
+                              <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                                {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                              </td>
+                              <td>
+                                <input className="form-input" type="number" min="1"
+                                  style={{ width: 80, padding: '3px 7px', fontSize: 13 }}
+                                  value={editPlantForm.nb_pots}
+                                  onChange={e => setEditPlantForm(f => ({ ...f, nb_pots: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }}
+                                  autoFocus />
+                              </td>
+                              <td>
+                                <input className="form-input" type="number" min="1"
+                                  style={{ width: 90, padding: '3px 7px', fontSize: 13 }}
+                                  value={editPlantForm.nb_branches}
+                                  onChange={e => setEditPlantForm(f => ({ ...f, nb_branches: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }} />
+                              </td>
+                              <td style={{ fontWeight: 600, color: emoy !== null ? (emoy >= 8 ? '#4caf7d' : emoy === 7 ? '#e8a84c' : '#e05555') : 'var(--texte-soft)' }}>
+                                {emoy !== null ? emoy : '—'}
+                              </td>
+                              <td style={{ color: ebenef !== null ? 'var(--or-pale)' : 'var(--texte-soft)', fontWeight: 600 }}>
+                                {ebenef !== null ? fmt(ebenef) : '—'}
+                              </td>
+                              <td>
+                                <input className="form-input" type="text"
+                                  style={{ minWidth: 120, padding: '3px 7px', fontSize: 12 }}
+                                  placeholder="Note…"
+                                  value={editPlantForm.note}
+                                  onChange={e => setEditPlantForm(f => ({ ...f, note: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }} />
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  <button className="btn btn-solid btn-sm" disabled={savingEditPlant} onClick={handleSavePlant}>{savingEditPlant ? '…' : '✓'}</button>
+                                  <button className="btn btn-or btn-sm" onClick={cancelEditPlant}>✕</button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        }
+                        return (
+                          <tr key={p.id}>
+                            <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                              {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                            </td>
+                            <td>{p.nb_pots}</td>
+                            <td style={{ fontWeight: 600 }}>{p.nb_branches}</td>
+                            <td style={{ fontWeight: 600, color: couleur }}>{moy}</td>
+                            <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(p.benefice)}</td>
+                            <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{p.note || '—'}</td>
+                            <td>
+                              <button className="btn btn-or btn-sm" onClick={() => startEditPlant(p)} title="Modifier">✎</button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}
-
-      {/* ── Historique plantations ── */}
-      {plantations.length > 0 && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <div className="card-title" style={{ marginBottom: 0 }}>Récoltes cette semaine ({plantations.length})</div>
-            {plantations.length > 5 && (
-              <button className="btn btn-or btn-sm" onClick={() => setShowAllPlants(v => !v)}>
-                {showAllPlants ? 'Afficher moins' : `Afficher plus (${plantations.length - 5} de plus)`}
-              </button>
-            )}
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Date</th><th>Pots</th><th>Branches</th><th>Moy/pot</th><th>Bénéfice</th><th>Note</th><th></th></tr>
-              </thead>
-              <tbody>
-                {(showAllPlants ? plantations : plantations.slice(0, 5)).map(p => {
-                  const isEditing = editPlantId === p.id
-                  const moy = p.nb_pots > 0 ? Math.round(p.nb_branches / p.nb_pots) : 0
-                  const couleur = moy >= 8 ? '#4caf7d' : moy === 7 ? '#e8a84c' : '#e05555'
-                  if (isEditing) {
-                    const epots = parseInt(editPlantForm.nb_pots) || 0
-                    const ebranches = parseInt(editPlantForm.nb_branches) || 0
-                    const emoy = epots > 0 && ebranches > 0 ? Math.round(ebranches / epots) : null
-                    const ebenef = branche && ebranches > 0 ? ebranches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : null
-                    return (
-                      <tr key={p.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
-                        <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                          {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
-                        </td>
-                        <td>
-                          <input className="form-input" type="number" min="1"
-                            style={{ width: 80, padding: '3px 7px', fontSize: 13 }}
-                            value={editPlantForm.nb_pots}
-                            onChange={e => setEditPlantForm(f => ({ ...f, nb_pots: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }}
-                            autoFocus />
-                        </td>
-                        <td>
-                          <input className="form-input" type="number" min="1"
-                            style={{ width: 90, padding: '3px 7px', fontSize: 13 }}
-                            value={editPlantForm.nb_branches}
-                            onChange={e => setEditPlantForm(f => ({ ...f, nb_branches: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }} />
-                        </td>
-                        <td style={{ fontWeight: 600, color: emoy !== null ? (emoy >= 8 ? '#4caf7d' : emoy === 7 ? '#e8a84c' : '#e05555') : 'var(--texte-soft)' }}>
-                          {emoy !== null ? emoy : '—'}
-                        </td>
-                        <td style={{ color: ebenef !== null ? 'var(--or-pale)' : 'var(--texte-soft)', fontWeight: 600 }}>
-                          {ebenef !== null ? fmt(ebenef) : '—'}
-                        </td>
-                        <td>
-                          <input className="form-input" type="text"
-                            style={{ minWidth: 120, padding: '3px 7px', fontSize: 12 }}
-                            placeholder="Note…"
-                            value={editPlantForm.note}
-                            onChange={e => setEditPlantForm(f => ({ ...f, note: e.target.value }))}
-                            onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }} />
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button className="btn btn-solid btn-sm" disabled={savingEditPlant} onClick={handleSavePlant}>{savingEditPlant ? '…' : '✓'}</button>
-                            <button className="btn btn-or btn-sm" onClick={cancelEditPlant}>✕</button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  }
-                  return (
-                    <tr key={p.id}>
-                      <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                        {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
-                      </td>
-                      <td>{p.nb_pots}</td>
-                      <td style={{ fontWeight: 600 }}>{p.nb_branches}</td>
-                      <td style={{ fontWeight: 600, color: couleur }}>{moy}</td>
-                      <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(p.benefice)}</td>
-                      <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{p.note || '—'}</td>
-                      <td>
-                        <button className="btn btn-or btn-sm" onClick={() => startEditPlant(p)} title="Modifier">✎</button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* ── Récap semaine ── */}
       <div className="card">
