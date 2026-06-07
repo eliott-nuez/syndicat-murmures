@@ -326,6 +326,36 @@ export default function FichePerso() {
     commission, net, nbATM, tranches_detail,
   } = calc
 
+  // Quotas hebdomadaires (mêmes seuils que Récap global)
+  const QUOTA_ACTIONS  = 20
+  const QUOTA_BRANCHES = 2000
+  const QUOTA_UNITES   = 300
+  const nbActionsQuota  = activites.length
+  const nbBranchesQuota = plantations.reduce((s, p) => s + (p.nb_branches || 0), 0)
+  const nbUnitesQuota   = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.quantite || 0), 0)
+
+  const Jauge = ({ label, valeur, objectif, suffixe = '' }) => {
+    const pct = Math.min(100, Math.round((valeur / objectif) * 100))
+    const ok  = valeur >= objectif
+    return (
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
+          <span style={{ color: 'var(--texte-soft)' }}>{label}</span>
+          <span style={{ color: ok ? '#5cba8a' : 'var(--or-pale)', fontWeight: 600 }}>
+            {valeur.toLocaleString('fr-FR')} / {objectif.toLocaleString('fr-FR')}{suffixe}{ok ? '  ✓' : ''}
+          </span>
+        </div>
+        <div style={{ height: 8, borderRadius: 5, background: 'rgba(201,168,76,0.12)', overflow: 'hidden' }}>
+          <div style={{
+            height: '100%', width: `${pct}%`, borderRadius: 5,
+            background: ok ? 'linear-gradient(90deg,#3f8f66,#5cba8a)' : 'linear-gradient(90deg,#9c7d2e,#e8c97a)',
+            transition: 'width 0.5s ease',
+          }} />
+        </div>
+      </div>
+    )
+  }
+
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
@@ -806,6 +836,21 @@ export default function FichePerso() {
       {/* ── Récap semaine ── */}
       <div className="card">
         <div className="card-title">Récap semaine</div>
+
+        {/* Quotas hebdomadaires */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 14,
+          marginBottom: 22, padding: '14px 16px',
+          background: 'rgba(201,168,76,0.05)', border: '1px solid var(--or-border)', borderRadius: 8,
+        }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--or)' }}>
+            Quotas de la semaine
+          </div>
+          <Jauge label="Actions effectuées"  valeur={nbActionsQuota}  objectif={QUOTA_ACTIONS} />
+          <Jauge label="Branches récoltées"  valeur={nbBranchesQuota} objectif={QUOTA_BRANCHES} />
+          <Jauge label="Drogues vendues"     valeur={nbUnitesQuota}   objectif={QUOTA_UNITES} suffixe=" unités" />
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: 'var(--texte-soft)' }}>Activités (hors cambriolage)</span>
