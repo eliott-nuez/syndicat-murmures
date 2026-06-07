@@ -235,7 +235,7 @@ function RecapSemaineMini({ membreId }) {
 
   if (!recap) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
 
-  const { totalActBrut, cambriolageTotal, nbATM, deductionBoitiers, totalBenefice, totalPlantations, base, multiplicateur, commission_pct, commission, net, tranches_detail, nbActions, nbBranches, nbUnites } = recap
+  const { totalActBrut, cambriolageTotal, totalBenefice, totalPlantations, base, multiplicateur, commission_pct, commission, net, tranches_detail, nbActions, nbBranches, nbUnites } = recap
 
   const QUOTA_ACTIONS  = 20
   const QUOTA_BRANCHES = 2000
@@ -287,12 +287,6 @@ function RecapSemaineMini({ membreId }) {
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'var(--texte-soft)' }}>Cambriolage (direct)</span>
           <span>{fmt(cambriolageTotal)}</span>
-        </div>
-      )}
-      {nbATM > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: 'var(--texte-soft)' }}>Boitiers ATM ({nbATM}×)</span>
-          <span style={{ color: '#e05555' }}>− {fmt(deductionBoitiers)}</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
