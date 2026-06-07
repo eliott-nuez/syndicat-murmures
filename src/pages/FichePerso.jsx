@@ -39,10 +39,25 @@ export default function FichePerso() {
     note: '',
     heure_faite: localNow(),
   })
-  const [savingAct, setSavingAct]       = useState(false)
-  const [editActId, setEditActId]       = useState(null)
-  const [editActForm, setEditActForm]   = useState({ type_code: '', somme_argent_sale: '', note: '' })
-  const [savingEditAct, setSavingEditAct] = useState(false)
+  const [savingAct, setSavingAct]           = useState(false)
+  const [editActId, setEditActId]           = useState(null)
+  const [editActForm, setEditActForm]       = useState({ type_code: '', somme_argent_sale: '', note: '' })
+  const [savingEditAct, setSavingEditAct]   = useState(false)
+
+  // Edition vente
+  const [editVenteId, setEditVenteId]       = useState(null)
+  const [editVenteForm, setEditVenteForm]   = useState({ quantite: '', prix_total: '', statut: 'Vendu' })
+  const [savingEditVente, setSavingEditVente] = useState(false)
+
+  // Edition plantation
+  const [editPlantId, setEditPlantId]       = useState(null)
+  const [editPlantForm, setEditPlantForm]   = useState({ nb_pots: '', nb_branches: '', note: '' })
+  const [savingEditPlant, setSavingEditPlant] = useState(false)
+
+  // Afficher plus / moins
+  const [showAllActs, setShowAllActs]     = useState(false)
+  const [showAllVentes, setShowAllVentes] = useState(false)
+  const [showAllPlants, setShowAllPlants] = useState(false)
 
   // Form vente (lignes dynamiques)
   const [lignesVente, setLignesVente] = useState([emptyLigne()])
@@ -70,9 +85,10 @@ export default function FichePerso() {
   const fetchPlantationsSemaine = async () => {
     const { data } = await supabase
       .from('plantations')
-      .select('benefice')
+      .select('id, nb_pots, nb_branches, branches_par_pot, benefice, date_plantation, note')
       .eq('membre_id', membre.id)
       .gte('date_plantation', getDebutSemaineStr())
+      .order('date_plantation', { ascending: false })
     setPlantations(data || [])
   }
 
@@ -112,6 +128,50 @@ export default function FichePerso() {
     const d = new Date(heure)
     d.setHours(d.getHours() + h)
     return localDateStr(d)
+  }
+
+  // ── Édition vente ──
+  const startEditVente = (v) => {
+    setEditVenteId(v.id)
+    setEditVenteForm({ quantite: String(v.quantite), prix_total: String(v.prix_total || ''), statut: v.statut })
+  }
+  const cancelEditVente = () => setEditVenteId(null)
+  const handleSaveVente = async () => {
+    const qte  = parseInt(editVenteForm.quantite) || 0
+    const prix = parseFloat(editVenteForm.prix_total) || 0
+    const vente = ventes.find(v => v.id === editVenteId)
+    const prixRevient = vente?.drogues?.prix_revient || 0
+    const argent_sale = editVenteForm.statut === 'Saisie' ? -(qte * prixRevient) : prix - (qte * prixRevient)
+    setSavingEditVente(true)
+    const { error } = await supabase.from('ventes_drogue')
+      .update({ quantite: qte, prix_total: editVenteForm.statut === 'Saisie' ? 0 : prix, statut: editVenteForm.statut, argent_sale })
+      .eq('id', editVenteId)
+    setSavingEditVente(false)
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
+    setMsg({ type: 'success', text: 'Vente mise à jour.' })
+    cancelEditVente(); fetchVentesSemaine()
+  }
+
+  // ── Édition plantation ──
+  const startEditPlant = (p) => {
+    setEditPlantId(p.id)
+    setEditPlantForm({ nb_pots: String(p.nb_pots || ''), nb_branches: String(p.nb_branches || ''), note: p.note || '' })
+  }
+  const cancelEditPlant = () => setEditPlantId(null)
+  const handleSavePlant = async () => {
+    const nb_pots     = parseInt(editPlantForm.nb_pots) || 0
+    const nb_branches = parseInt(editPlantForm.nb_branches) || 0
+    if (!nb_pots || !nb_branches) { setMsg({ type: 'error', text: 'Pots et branches obligatoires.' }); return }
+    const branches_par_pot = Math.round(nb_branches / nb_pots)
+    const beneficeFinal    = branche ? nb_branches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : 0
+    setSavingEditPlant(true)
+    const { error } = await supabase.from('plantations')
+      .update({ nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal, note: editPlantForm.note || null })
+      .eq('id', editPlantId)
+    setSavingEditPlant(false)
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
+    setMsg({ type: 'success', text: 'Récolte mise à jour.' })
+    cancelEditPlant(); fetchPlantationsSemaine()
   }
 
   const startEditAct = (a) => {
@@ -337,14 +397,21 @@ export default function FichePerso() {
 
         {activites.length > 0 && (
           <div style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--texte-soft)', marginBottom: 10 }}>
-              Activités cette semaine
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--texte-soft)' }}>
+                Activités cette semaine ({activites.length})
+              </div>
+              {activites.length > 5 && (
+                <button className="btn btn-or btn-sm" onClick={() => setShowAllActs(v => !v)}>
+                  {showAllActs ? 'Afficher moins' : `Afficher plus (${activites.length - 5} de plus)`}
+                </button>
+              )}
             </div>
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Type</th><th>Heure</th><th>Prochaine dispo</th><th>Somme</th><th>Note</th><th></th></tr></thead>
                 <tbody>
-                  {activites.map(a => {
+                  {(showAllActs ? activites : activites.slice(0, 5)).map(a => {
                     const isEditing = editActId === a.id
                     if (isEditing) return (
                       <tr key={a.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
@@ -490,31 +557,84 @@ export default function FichePerso() {
 
         {ventes.length > 0 && (
           <div style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--texte-soft)', marginBottom: 10 }}>
-              Ventes cette semaine
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--texte-soft)' }}>
+                Ventes cette semaine ({ventes.length})
+              </div>
+              {ventes.length > 5 && (
+                <button className="btn btn-or btn-sm" onClick={() => setShowAllVentes(v => !v)}>
+                  {showAllVentes ? 'Afficher moins' : `Afficher plus (${ventes.length - 5} de plus)`}
+                </button>
+              )}
             </div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Bénéfice</th><th>Statut</th><th>Date</th></tr></thead>
+                <thead><tr><th>Drogue</th><th>Qté</th><th>Montant total</th><th>Bénéfice</th><th>Statut</th><th>Date</th><th></th></tr></thead>
                 <tbody>
-                  {ventes.map(v => (
-                    <tr key={v.id}>
-                      <td>{v.drogues?.nom || '—'}</td>
-                      <td>{v.quantite}</td>
-                      <td style={{ color: 'var(--texte-soft)' }}>
-                        {v.statut === 'Saisie' ? '—' : fmt(v.prix_total || 0)}
-                      </td>
-                      <td style={{ color: v.statut === 'Saisie' ? '#e05555' : 'var(--or-pale)' }}>
-                        {v.statut === 'Saisie' ? `− ${fmt(Math.abs(v.argent_sale))}` : fmt(v.argent_sale)}
-                      </td>
-                      <td>
-                        <span className={`badge ${v.statut === 'Saisie' ? 'badge-rouge' : 'badge-vert'}`}>
-                          {v.statut}
-                        </span>
-                      </td>
-                      <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(v.created_at)}</td>
-                    </tr>
-                  ))}
+                  {(showAllVentes ? ventes : ventes.slice(0, 5)).map(v => {
+                    const isEditing = editVenteId === v.id
+                    if (isEditing) return (
+                      <tr key={v.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
+                        <td style={{ color: 'var(--texte-soft)' }}>{v.drogues?.nom || '—'}</td>
+                        <td>
+                          <input className="form-input" type="number" min="1"
+                            style={{ width: 70, padding: '3px 7px', fontSize: 13 }}
+                            value={editVenteForm.quantite}
+                            onChange={e => setEditVenteForm(f => ({ ...f, quantite: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Escape') cancelEditVente() }}
+                            autoFocus />
+                        </td>
+                        <td>
+                          {editVenteForm.statut === 'Saisie' ? (
+                            <span style={{ color: 'var(--texte-soft)', fontSize: 12 }}>— saisie</span>
+                          ) : (
+                            <input className="form-input" type="number" min="0"
+                              style={{ width: 110, padding: '3px 7px', fontSize: 13 }}
+                              value={editVenteForm.prix_total}
+                              onChange={e => setEditVenteForm(f => ({ ...f, prix_total: e.target.value }))}
+                              onKeyDown={e => { if (e.key === 'Escape') cancelEditVente() }} />
+                          )}
+                        </td>
+                        <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>—</td>
+                        <td>
+                          <select className="form-select" style={{ minWidth: 90, padding: '3px 7px', fontSize: 12 }}
+                            value={editVenteForm.statut}
+                            onChange={e => setEditVenteForm(f => ({ ...f, statut: e.target.value }))}>
+                            <option value="Vendu">Vendu</option>
+                            <option value="Saisie">Saisie</option>
+                          </select>
+                        </td>
+                        <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(v.created_at)}</td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-solid btn-sm" disabled={savingEditVente} onClick={handleSaveVente}>{savingEditVente ? '…' : '✓'}</button>
+                            <button className="btn btn-or btn-sm" onClick={cancelEditVente}>✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                    return (
+                      <tr key={v.id}>
+                        <td>{v.drogues?.nom || '—'}</td>
+                        <td>{v.quantite}</td>
+                        <td style={{ color: 'var(--texte-soft)' }}>
+                          {v.statut === 'Saisie' ? '—' : fmt(v.prix_total || 0)}
+                        </td>
+                        <td style={{ color: v.statut === 'Saisie' ? '#e05555' : 'var(--or-pale)' }}>
+                          {v.statut === 'Saisie' ? `− ${fmt(Math.abs(v.argent_sale))}` : fmt(v.argent_sale)}
+                        </td>
+                        <td>
+                          <span className={`badge ${v.statut === 'Saisie' ? 'badge-rouge' : 'badge-vert'}`}>
+                            {v.statut}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{fmtDate(v.created_at)}</td>
+                        <td>
+                          <button className="btn btn-or btn-sm" onClick={() => startEditVente(v)} title="Modifier">✎</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -588,6 +708,97 @@ export default function FichePerso() {
           </div>
         )
       })()}
+
+      {/* ── Historique plantations ── */}
+      {plantations.length > 0 && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div className="card-title" style={{ marginBottom: 0 }}>Récoltes cette semaine ({plantations.length})</div>
+            {plantations.length > 5 && (
+              <button className="btn btn-or btn-sm" onClick={() => setShowAllPlants(v => !v)}>
+                {showAllPlants ? 'Afficher moins' : `Afficher plus (${plantations.length - 5} de plus)`}
+              </button>
+            )}
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Date</th><th>Pots</th><th>Branches</th><th>Moy/pot</th><th>Bénéfice</th><th>Note</th><th></th></tr>
+              </thead>
+              <tbody>
+                {(showAllPlants ? plantations : plantations.slice(0, 5)).map(p => {
+                  const isEditing = editPlantId === p.id
+                  const moy = p.nb_pots > 0 ? Math.round(p.nb_branches / p.nb_pots) : 0
+                  const couleur = moy >= 8 ? '#4caf7d' : moy === 7 ? '#e8a84c' : '#e05555'
+                  if (isEditing) {
+                    const epots = parseInt(editPlantForm.nb_pots) || 0
+                    const ebranches = parseInt(editPlantForm.nb_branches) || 0
+                    const emoy = epots > 0 && ebranches > 0 ? Math.round(ebranches / epots) : null
+                    const ebenef = branche && ebranches > 0 ? ebranches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : null
+                    return (
+                      <tr key={p.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
+                        <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                          {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                        </td>
+                        <td>
+                          <input className="form-input" type="number" min="1"
+                            style={{ width: 80, padding: '3px 7px', fontSize: 13 }}
+                            value={editPlantForm.nb_pots}
+                            onChange={e => setEditPlantForm(f => ({ ...f, nb_pots: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }}
+                            autoFocus />
+                        </td>
+                        <td>
+                          <input className="form-input" type="number" min="1"
+                            style={{ width: 90, padding: '3px 7px', fontSize: 13 }}
+                            value={editPlantForm.nb_branches}
+                            onChange={e => setEditPlantForm(f => ({ ...f, nb_branches: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }} />
+                        </td>
+                        <td style={{ fontWeight: 600, color: emoy !== null ? (emoy >= 8 ? '#4caf7d' : emoy === 7 ? '#e8a84c' : '#e05555') : 'var(--texte-soft)' }}>
+                          {emoy !== null ? emoy : '—'}
+                        </td>
+                        <td style={{ color: ebenef !== null ? 'var(--or-pale)' : 'var(--texte-soft)', fontWeight: 600 }}>
+                          {ebenef !== null ? fmt(ebenef) : '—'}
+                        </td>
+                        <td>
+                          <input className="form-input" type="text"
+                            style={{ minWidth: 120, padding: '3px 7px', fontSize: 12 }}
+                            placeholder="Note…"
+                            value={editPlantForm.note}
+                            onChange={e => setEditPlantForm(f => ({ ...f, note: e.target.value }))}
+                            onKeyDown={e => { if (e.key === 'Escape') cancelEditPlant() }} />
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-solid btn-sm" disabled={savingEditPlant} onClick={handleSavePlant}>{savingEditPlant ? '…' : '✓'}</button>
+                            <button className="btn btn-or btn-sm" onClick={cancelEditPlant}>✕</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+                  return (
+                    <tr key={p.id}>
+                      <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
+                        {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                      </td>
+                      <td>{p.nb_pots}</td>
+                      <td style={{ fontWeight: 600 }}>{p.nb_branches}</td>
+                      <td style={{ fontWeight: 600, color: couleur }}>{moy}</td>
+                      <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(p.benefice)}</td>
+                      <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{p.note || '—'}</td>
+                      <td>
+                        <button className="btn btn-or btn-sm" onClick={() => startEditPlant(p)} title="Modifier">✎</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ── Récap semaine ── */}
       <div className="card">
