@@ -72,6 +72,24 @@ const IcoStock = () => (
   </Ico>
 )
 
+/** Armurerie — pistolet stylisé */
+const IcoArmurerie = () => (
+  <Ico>
+    <path d="M3 14h9v-3h6a2 2 0 0 1 2 2v1h-2v3h-3v-3H9v3H6v-3H3z"/>
+    <path d="M9 11V8h4v3"/>
+  </Ico>
+)
+
+/** Garage — voiture vue de face */
+const IcoGarage = () => (
+  <Ico>
+    <path d="M4 16v-3.5L6 8h12l2 4.5V16"/>
+    <path d="M4 16h16v2.5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1V17h-9v1.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>
+    <circle cx="7.5" cy="14" r="1.1"/>
+    <circle cx="16.5" cy="14" r="1.1"/>
+  </Ico>
+)
+
 /** Ventes groupe — Balance / échange */
 const IcoVentes = () => (
   <Ico>
@@ -174,12 +192,18 @@ const NAV_TOUS = [
   { to: '/calendrier',       label: 'Calendrier',           icon: <IcoCalendrier /> },
 ]
 const NAV_RESPONSABLE = [
-  { to: '/stock',             label: 'Stock & Catalogue',  icon: <IcoStock /> },
-  { to: '/logs',              label: 'Logs mouvements',    icon: <IcoLogs /> },
   { to: '/contrats-familles', label: 'Contrats Familles',  icon: <IcoContrats /> },
 ]
 const NAV_DIRECTION = [
   { to: '/admin', label: 'Administration', icon: <IcoAdmin /> },
+]
+
+// Sous-menu "Stock" — regroupe la gestion des biens du gang
+const STOCK_ITEMS = [
+  { to: '/stock',      label: 'Stock & Catalogue', icon: <IcoStock />,     roles: ['responsable', 'direction'] },
+  { to: '/armurerie',  label: 'Armurerie',         icon: <IcoArmurerie />, roles: ['responsable', 'direction'] },
+  { to: '/garage',     label: 'Garage',            icon: <IcoGarage />,    roles: ['responsable', 'direction'] },
+  { to: '/logs',       label: 'Logs mouvements',   icon: <IcoLogs />,      roles: ['responsable', 'direction'] },
 ]
 
 // Sous-menu "Finance" — regroupe les pages liées à l'argent / fiches
@@ -234,6 +258,7 @@ export default function Layout({ children }) {
   }
 
   const financeChildren = FINANCE_ITEMS.filter(item => item.roles.includes(rang))
+  const stockChildren   = STOCK_ITEMS.filter(item => item.roles.includes(rang))
 
   const navItems = isFamilles
     ? [{ to: '/contrats-familles', label: 'Contrats', icon: <IcoContrats /> }]
@@ -241,6 +266,9 @@ export default function Layout({ children }) {
         ...NAV_TOUS,
         ...(financeChildren.length > 0
           ? [{ group: 'finance', label: 'Finance', icon: <IcoFinance />, children: financeChildren }]
+          : []),
+        ...(stockChildren.length > 0
+          ? [{ group: 'stock', label: 'Stock', icon: <IcoStock />, children: stockChildren }]
           : []),
         ...(isResponsable ? NAV_RESPONSABLE : []),
         ...(isDir         ? NAV_DIRECTION   : []),

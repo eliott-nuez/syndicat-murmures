@@ -7,6 +7,8 @@ import LoginPage      from './pages/LoginPage'
 import Dashboard      from './pages/Dashboard'
 import FichePerso     from './pages/FichePerso'
 import ActiviteGroupe from './pages/ActiviteGroupe'
+import Armurerie      from './pages/Armurerie'
+import Garage         from './pages/Garage'
 import RecapGlobal    from './pages/RecapGlobal'
 import Stock          from './pages/Stock'
 import Tricount       from './pages/Tricount'
@@ -59,6 +61,12 @@ export default function App() {
         {/* Responsable + Direction */}
         <Route path="/stock" element={
           <AppLayout roles={['responsable','direction']}><Stock /></AppLayout>
+        } />
+        <Route path="/armurerie" element={
+          <AppLayout roles={['responsable','direction']}><Armurerie /></AppLayout>
+        } />
+        <Route path="/garage" element={
+          <AppLayout roles={['responsable','direction']}><Garage /></AppLayout>
         } />
         <Route path="/logs" element={
           <AppLayout roles={['responsable','direction']}><Logs /></AppLayout>
