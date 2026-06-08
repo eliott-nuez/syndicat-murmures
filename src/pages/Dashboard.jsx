@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
+import { chargerQuotas } from '../utils/quotas'
 
 // Types d'activites avec leurs cooldowns (en heures)
 // Modifier ici si les cooldowns changent
@@ -242,15 +243,17 @@ export default function Dashboard() {
 function RecapSemaineMini({ membreId }) {
   const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const [recap, setRecap] = useState(null)
+  const [quotas, setQuotas] = useState(null)
 
   useEffect(() => {
     const fetchRecap = async () => {
       const debutStr = getDebutSemaineStr()
-      const [commParams, { data: activites }, { data: ventes }, { data: plants }] = await Promise.all([
+      const [commParams, { data: activites }, { data: ventes }, { data: plants }, quotasData] = await Promise.all([
         chargerParamsCommission(),
         supabase.from('activites').select('somme_argent_sale, type_code').eq('membre_id', membreId).gte('heure_faite', debutStr),
         supabase.from('ventes_drogue').select('argent_sale, prix_total, statut, quantite').eq('membre_id', membreId).gte('created_at', getDebutSemaine().toISOString()),
         supabase.from('plantations').select('benefice, nb_branches').eq('membre_id', membreId).gte('date_plantation', debutStr),
+        chargerQuotas(membre.rang),
       ])
 
       const calc = calculerCommission(activites || [], ventes || [], membre.rang, commParams, plants || [])
@@ -260,6 +263,7 @@ function RecapSemaineMini({ membreId }) {
         nbBranches: (plants    || []).reduce((s, p) => s + (p.nb_branches || 0), 0),
         nbUnites:   (ventes    || []).filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.quantite || 0), 0),
       })
+      setQuotas(quotasData)
     }
     fetchRecap()
   }, [membreId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -267,13 +271,13 @@ function RecapSemaineMini({ membreId }) {
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
-  if (!recap) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
+  if (!recap || !quotas) return <div style={{ color: 'var(--texte-soft)', fontSize: 13 }}>Chargement…</div>
 
   const { totalActBrut, cambriolageTotal, totalBenefice, totalPlantations, base, multiplicateur, commission_pct, commission, net, tranches_detail, nbActions, nbBranches, nbUnites } = recap
 
-  const QUOTA_ACTIONS  = 20
-  const QUOTA_BRANCHES = 2000
-  const QUOTA_UNITES   = 300
+  const QUOTA_ACTIONS  = quotas.actions
+  const QUOTA_BRANCHES = quotas.branches
+  const QUOTA_UNITES   = quotas.unites
 
   const Jauge = ({ label, valeur, objectif, suffixe = '' }) => {
     const pct = Math.min(100, Math.round((valeur / objectif) * 100))

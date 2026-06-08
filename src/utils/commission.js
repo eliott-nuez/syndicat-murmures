@@ -12,10 +12,11 @@ export async function chargerParamsCommission() {
     { data: boitier },
   ] = await Promise.all([
     supabase.from('tranches_commission').select('*').order('ordre'),
-    supabase.from('parametres').select('cle, valeur').in('cle', [
+    supabase.from('parametres').select('cle, valeur, valeur_texte').in('cle', [
       'commission_multiplicateur_membre',
       'commission_multiplicateur_responsable',
       'commission_multiplicateur_direction',
+      'commission_mode',
     ]),
     supabase.from('consommables')
       .select('cout').eq('type_activite', 'ATM').eq('actif', true)
@@ -23,13 +24,16 @@ export async function chargerParamsCommission() {
   ])
 
   const multiplicateurs = {}
+  let mode = 'multiplicateur'
   ;(params || []).forEach(p => {
+    if (p.cle === 'commission_mode') { mode = p.valeur_texte || 'multiplicateur'; return }
     multiplicateurs[p.cle.replace('commission_multiplicateur_', '')] = Number(p.valeur)
   })
 
   return {
     tranches: tranches || [],
     multiplicateurs,
+    mode,
     boitierCout: boitier?.cout || 0,
   }
 }
@@ -46,7 +50,7 @@ export async function chargerParamsCommission() {
  *    multipliée par le multiplicateur du rang.
  *    Ex : 150 000$ → 7%×mult sur les 100 000 premiers + 5%×mult sur les 50 000 suivants
  */
-export function calculerCommission(activites, ventes, rang, { tranches, multiplicateurs, boitierCout }, plantations = []) {
+export function calculerCommission(activites, ventes, rang, { tranches, multiplicateurs, mode, boitierCout }, plantations = []) {
   const actsCamb     = activites.filter(a => a.type_code === 'Cambriolage')
   const actsHorsCamb = activites.filter(a => a.type_code !== 'Cambriolage')
   const nbATM        = activites.filter(a => a.type_code === 'ATM').length
@@ -66,7 +70,8 @@ export function calculerCommission(activites, ventes, rang, { tranches, multipli
   const base = totalActNet + totalBenefice + totalPlantations
 
   // Calcul progressif par tranches (chaque tranche sur sa portion uniquement)
-  const sorted       = [...tranches].sort((a, b) => a.ordre - b.ordre)
+  const sorted         = [...tranches].sort((a, b) => a.ordre - b.ordre)
+  const modeVariable   = mode === 'variable'
   const multiplicateur = multiplicateurs[rang] ?? 1
 
   let commission = 0
@@ -77,13 +82,18 @@ export function calculerCommission(activites, ventes, rang, { tranches, multipli
     const trancheMax    = t.max_montant !== null ? t.max_montant : Infinity
     const portion       = Math.min(base, trancheMax) - t.min_montant
     if (portion <= 0) continue
-    const comm_tranche  = portion * t.taux_pct * multiplicateur / 100
+    // Mode variable : % saisi directement par grade (ignore le multiplicateur).
+    // Mode multiplicateur : taux de base de la tranche × multiplicateur du rang.
+    const tauxEffectif  = modeVariable
+      ? Number(t[`taux_${rang}`] ?? t.taux_pct ?? 0)
+      : t.taux_pct * multiplicateur
+    const comm_tranche  = portion * tauxEffectif / 100
     commission += comm_tranche
     tranches_detail.push({
       min: t.min_montant,
       max: t.max_montant,
       taux_pct: t.taux_pct,
-      taux_effectif: t.taux_pct * multiplicateur,
+      taux_effectif: tauxEffectif,
       portion,
       commission: comm_tranche,
     })

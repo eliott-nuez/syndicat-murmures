@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 import { getRangEffectif } from '../utils/viewAs'
+import { chargerQuotas } from '../utils/quotas'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -27,6 +28,7 @@ export default function FichePerso() {
   const [ventes, setVentes]                 = useState([])
   const [plantations, setPlantations]       = useState([])
   const [commissionParams, setCommissionParams] = useState({ tranches: [], multiplicateurs: {}, boitierCout: 0 })
+  const [quotas, setQuotas] = useState({ actions: 20, branches: 2000, unites: 300 })
   const [msg, setMsg]                       = useState({ type: '', text: '' })
   const [msgMdp, setMsgMdp]                 = useState({ type: '', text: '' })
   const [branche, setBranche]               = useState(null)
@@ -78,6 +80,7 @@ export default function FichePerso() {
     fetchVentesSemaine()
     fetchPlantationsSemaine()
     chargerParamsCommission().then(setCommissionParams)
+    chargerQuotas(getRangEffectif() || membre.rang).then(setQuotas)
     supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBranche(data))
     if (['responsable','direction'].includes(getRangEffectif() || membre.rang)) {
       supabase.from('membres').select('id, surnom, rang').order('surnom').then(({ data }) => setMembresListe(data || []))
@@ -326,10 +329,10 @@ export default function FichePerso() {
     commission, net, nbATM, tranches_detail,
   } = calc
 
-  // Quotas hebdomadaires (mêmes seuils que Récap global)
-  const QUOTA_ACTIONS  = 20
-  const QUOTA_BRANCHES = 2000
-  const QUOTA_UNITES   = 300
+  // Quotas hebdomadaires (configurés par grade depuis l'administration)
+  const QUOTA_ACTIONS  = quotas.actions
+  const QUOTA_BRANCHES = quotas.branches
+  const QUOTA_UNITES   = quotas.unites
   const nbActionsQuota  = activites.length
   const nbBranchesQuota = plantations.reduce((s, p) => s + (p.nb_branches || 0), 0)
   const nbUnitesQuota   = ventes.filter(v => v.statut === 'Vendu').reduce((s, v) => s + (v.quantite || 0), 0)
