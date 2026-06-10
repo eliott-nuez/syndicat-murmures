@@ -20,6 +20,7 @@ SUPABASE_KEY    = os.environ['SUPABASE_SERVICE_KEY']
 DISCORD_TOKEN   = os.environ['DISCORD_TOKEN']
 CHANNEL_IDS     = [c.strip() for c in os.getenv('CHANNEL_IDS', '').split(',') if c.strip()]
 VEHICULE_CHANNEL_ID = os.getenv('VEHICULE_CHANNEL_ID', '').strip()
+WRONG_GARAGE_CHANNEL_ID = os.getenv('WRONG_GARAGE_CHANNEL_ID', '1514185224806989924').strip()
 MONITOR_CHAN_ID = int(os.getenv('MONITOR_CHANNEL_ID', 0))
 WEBHOOK_URL     = os.getenv('MONITOR_WEBHOOK_URL', '')
 
@@ -61,6 +62,16 @@ async def send_log(emoji: str, msg: str):
         except Exception as e:
             logger.warning(f"Webhook send error: {e}")
 
+async def send_channel_message(channel_id: str, content: str):
+    """Envoie un message texte brut dans un channel donné (mentions autorisées)."""
+    if not channel_id:
+        return
+    try:
+        chan = bot.get_channel(int(channel_id)) or await bot.fetch_channel(int(channel_id))
+        await chan.send(content)
+    except Exception as e:
+        logger.error(f"send_channel_message error: {e}")
+
 async def send_monitor(content: str, view: discord.ui.View = None):
     """Envoie dans le channel de monitoring (supporte les boutons)."""
     if not MONITOR_CHAN_ID:
@@ -85,7 +96,7 @@ async def _try_find(prenom: str, nom: str) -> dict | None:
     """Tente une recherche ilike sur prenom+nom (dans cet ordre)."""
     try:
         r = await db(lambda: supabase.table('membres')
-            .select('id, surnom, prenom, nom')
+            .select('id, surnom, prenom, nom, id_intranet')
             .ilike('prenom', prenom)
             .ilike('nom', nom)
             .limit(1)
@@ -380,6 +391,33 @@ async def process_vehicule_message(message: discord.Message, is_recovery: bool =
                     verbe = 'rentré' if entree else 'sorti'
                     nom_v = voiture.get('modele_jeu') or modele
                     line = f'**{personnage}** a {verbe} **{nom_v}** ({plaque}) — garage {id_garage}, place n°{emp["numero"]}'
+                elif entree:
+                    # ── Véhicule rangé, mais pas dans son garage attitré ─────────
+                    nom_v = voiture.get('modele_jeu') or modele
+                    r = await db(lambda: supabase.table('emplacements')
+                        .select('id, numero, garages(id_garage, lieu, numero)')
+                        .eq('voiture_id', voiture['id']).limit(1).execute())
+                    home = r.data[0] if r and r.data else None
+                    home_garage = home.get('garages') if home else None
+
+                    if home_garage:
+                        if not is_recovery:
+                            membre = await find_membre(personnage)
+                            discord_id = membre.get('id_intranet') if membre else None
+                            mention = f'<@{discord_id}>' if discord_id else f'**{personnage}**'
+                            lieu = home_garage.get('lieu') or '?'
+                            num = home_garage.get('numero') or home_garage.get('id_garage')
+                            warn_msg = (
+                                f"{mention} Tu as rangé le/la **{nom_v}** dans le mauvais garage. "
+                                f"Ranges le/la dans le {lieu} {num}. Merci !"
+                            )
+                            await send_channel_message(WRONG_GARAGE_CHANNEL_ID, warn_msg)
+                        emoji = '⚠️'
+                        line = (f'**{personnage}** a rangé **{nom_v}** ({plaque}) dans le mauvais garage '
+                                f'({id_garage}) — attitré au garage {home_garage.get("id_garage")}')
+                    else:
+                        emoji = '⚠️'
+                        line = f'Véhicule **{plaque}** ({modele}) non assigné à un emplacement du garage {id_garage}'
                 else:
                     emoji = '⚠️'
                     line = f'Véhicule **{plaque}** ({modele}) non assigné à un emplacement du garage {id_garage}'
