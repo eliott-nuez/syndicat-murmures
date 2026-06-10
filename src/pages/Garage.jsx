@@ -206,7 +206,7 @@ export default function Garage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+            <div className="grid-5">
               {slots.map(emp => {
                 const ed = editingEmpId === emp.id
                 const v = emp.voitures
