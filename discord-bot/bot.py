@@ -408,7 +408,7 @@ async def process_vehicule_message(message: discord.Message, is_recovery: bool =
                             lieu = home_garage.get('lieu') or '?'
                             num = home_garage.get('numero') or home_garage.get('id_garage')
                             warn_msg = (
-                                f"{mention} Tu as rangé le/la **{nom_v}** dans le mauvais garage. "
+                                f"{mention} Tu as rangé le/la **{nom_v}** immatriculé **{plaque}** dans le mauvais garage. "
                                 f"Ranges le/la dans le {lieu} {num}. Merci !"
                             )
                             await send_channel_message(WRONG_GARAGE_CHANNEL_ID, warn_msg)
