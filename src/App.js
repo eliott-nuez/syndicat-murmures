@@ -8,6 +8,7 @@ import Dashboard      from './pages/Dashboard'
 import FichePerso     from './pages/FichePerso'
 import ActiviteGroupe from './pages/ActiviteGroupe'
 import Armurerie      from './pages/Armurerie'
+import Vehicule       from './pages/Vehicule'
 import Garage         from './pages/Garage'
 import RecapGlobal    from './pages/RecapGlobal'
 import Stock          from './pages/Stock'
@@ -64,6 +65,9 @@ export default function App() {
         } />
         <Route path="/armurerie" element={
           <AppLayout roles={['responsable','direction']}><Armurerie /></AppLayout>
+        } />
+        <Route path="/vehicules" element={
+          <AppLayout roles={['responsable','direction']}><Vehicule /></AppLayout>
         } />
         <Route path="/garage" element={
           <AppLayout roles={['responsable','direction']}><Garage /></AppLayout>

@@ -90,6 +90,16 @@ const IcoGarage = () => (
   </Ico>
 )
 
+/** Véhicule — voiture vue de côté */
+const IcoVehicule = () => (
+  <Ico>
+    <path d="M3 16l1.5-5a2 2 0 0 1 1.9-1.4h11.2A2 2 0 0 1 19.5 11l1.5 5"/>
+    <path d="M3 16h18v2a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1h-11v1a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/>
+    <circle cx="7.5" cy="16" r="1.3"/>
+    <circle cx="16.5" cy="16" r="1.3"/>
+  </Ico>
+)
+
 /** Ventes groupe — Balance / échange */
 const IcoVentes = () => (
   <Ico>
@@ -202,6 +212,7 @@ const NAV_DIRECTION = [
 const STOCK_ITEMS = [
   { to: '/stock',      label: 'Stock & Catalogue', icon: <IcoStock />,     roles: ['responsable', 'direction'] },
   { to: '/armurerie',  label: 'Armurerie',         icon: <IcoArmurerie />, roles: ['responsable', 'direction'] },
+  { to: '/vehicules',  label: 'Véhicule',          icon: <IcoVehicule />,  roles: ['responsable', 'direction'] },
   { to: '/garage',     label: 'Garage',            icon: <IcoGarage />,    roles: ['responsable', 'direction'] },
   { to: '/logs',       label: 'Logs mouvements',   icon: <IcoLogs />,      roles: ['responsable', 'direction'] },
 ]
