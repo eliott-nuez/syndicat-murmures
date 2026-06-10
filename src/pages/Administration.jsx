@@ -202,7 +202,7 @@ export default function Administration() {
   const fetchMembres = async () => {
     setLoading(true)
     const { data } = await supabase.from('membres')
-      .select('id, surnom, nom, prenom, rang, actif, created_at, tel_legal, tel_illegal, rib, matricule')
+      .select('id, surnom, nom, prenom, rang, actif, created_at, tel_legal, tel_illegal, rib, matricule, id_intranet')
       .order('surnom')
     setMembres(data || [])
     setLoading(false)
@@ -285,7 +285,7 @@ export default function Administration() {
     setEditInfoForm({
       nom: m.nom || '', prenom: m.prenom || '',
       tel_legal: m.tel_legal || '', tel_illegal: m.tel_illegal || '',
-      rib: m.rib || '', matricule: m.matricule || '',
+      rib: m.rib || '', matricule: m.matricule || '', id_intranet: m.id_intranet || '',
     })
   }
   const cancelEditInfo = () => { setEditInfoId(null); setEditInfoForm({}) }
@@ -407,7 +407,7 @@ export default function Administration() {
   // ── Recherche membres ───────────────────────────────────────────────────────
   const searchLower = search.trim().toLowerCase()
   const membresFiltres = searchLower === '' ? membres : membres.filter(m => {
-    const champs = [m.surnom, m.nom, m.prenom, m.rang, m.id, m.tel_legal, m.tel_illegal, m.rib, m.matricule, fmtDate(m.created_at)]
+    const champs = [m.surnom, m.nom, m.prenom, m.rang, m.id, m.tel_legal, m.tel_illegal, m.rib, m.matricule, m.id_intranet, fmtDate(m.created_at)]
     return champs.some(c => (c || '').toString().toLowerCase().includes(searchLower))
   })
 
@@ -469,7 +469,7 @@ export default function Administration() {
       {activeTab === 'membres' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-            <input className="form-input" placeholder="🔎 Rechercher un membre (surnom, nom, prénom, rang, id, téléphone, RIB, matricule, date...)"
+            <input className="form-input" placeholder="🔎 Rechercher un membre (surnom, nom, prénom, rang, id, téléphone, RIB, matricule, ID intranet, date...)"
               style={{ minWidth: 360, flex: 1 }} value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn btn-solid" onClick={() => setShowForm(!showForm)}>
               {showForm ? '✕ Annuler' : '+ Créer un membre'}
@@ -505,7 +505,7 @@ export default function Administration() {
               <table>
                 <thead>
                   <tr>
-                    <th>Surnom</th><th>Nom</th><th>Prénom</th><th>Rang</th><th>ID unique</th>
+                    <th>Surnom</th><th>Nom</th><th>Prénom</th><th>Rang</th><th>ID unique</th><th>ID intranet</th>
                     <th>Tél. légal</th><th>Tél. illégal</th><th>RIB</th><th>Statut</th><th>Créé le</th><th></th>
                   </tr>
                 </thead>
@@ -547,6 +547,7 @@ export default function Administration() {
                         {ed ? (
                           <>
                             <td><input className="form-input" style={{ width: 90, padding: '3px 7px', fontSize: 12 }} value={editInfoForm.matricule} onChange={e => setEditInfoForm(f => ({ ...f, matricule: e.target.value }))} placeholder="ID RP" /></td>
+                            <td><input className="form-input" style={{ width: 100, padding: '3px 7px', fontSize: 12 }} value={editInfoForm.id_intranet} onChange={e => setEditInfoForm(f => ({ ...f, id_intranet: e.target.value }))} placeholder="ID intranet" /></td>
                             <td><input className="form-input" style={{ width: 100, padding: '3px 7px', fontSize: 12 }} value={editInfoForm.tel_legal} onChange={e => setEditInfoForm(f => ({ ...f, tel_legal: e.target.value }))} /></td>
                             <td><input className="form-input" style={{ width: 100, padding: '3px 7px', fontSize: 12 }} value={editInfoForm.tel_illegal} onChange={e => setEditInfoForm(f => ({ ...f, tel_illegal: e.target.value }))} /></td>
                             <td><input className="form-input" style={{ width: 120, padding: '3px 7px', fontSize: 12 }} value={editInfoForm.rib} onChange={e => setEditInfoForm(f => ({ ...f, rib: e.target.value }))} /></td>
@@ -554,6 +555,7 @@ export default function Administration() {
                         ) : (
                           <>
                             <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{m.matricule || '—'}</td>
+                            <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{m.id_intranet || '—'}</td>
                             <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{m.tel_legal || '—'}</td>
                             <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{m.tel_illegal || '—'}</td>
                             <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>{m.rib || '—'}</td>
@@ -602,8 +604,8 @@ export default function Administration() {
               </table>
             </div>
             <div style={{ fontSize: 11, color: 'var(--texte-soft)', marginTop: 10 }}>
-              Champs affichés : Surnom · Nom · Prénom · Rang · ID unique (matricule) · Tél. légal · Tél. illégal · RIB · Statut · Date de création.
-              Clique sur « ✎ Infos » pour modifier nom, prénom, matricule, téléphones et RIB ; sur le rang pour le changer ; sur « 🔑 MDP » pour forcer un nouveau mot de passe.
+              Champs affichés : Surnom · Nom · Prénom · Rang · ID unique (matricule) · ID intranet · Tél. légal · Tél. illégal · RIB · Statut · Date de création.
+              Clique sur « ✎ Infos » pour modifier nom, prénom, matricule, ID intranet, téléphones et RIB ; sur le rang pour le changer ; sur « 🔑 MDP » pour forcer un nouveau mot de passe.
             </div>
           </div>
         </div>
