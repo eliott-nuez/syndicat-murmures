@@ -14,6 +14,11 @@ function ajouteHeures(date, heures) {
   return new Date(date.getTime() + heures * 3600 * 1000)
 }
 
+function toInputDateTime(d) {
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export default function ActiviteGroupe() {
   const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const isDirection = membre.rang === 'direction'
@@ -28,6 +33,9 @@ export default function ActiviteGroupe() {
   const [msg, setMsg]                 = useState({ type: '', text: '' })
   const [showAll, setShowAll]         = useState(false)
   const [loading, setLoading]         = useState(true)
+  const [editingId, setEditingId]     = useState(null)
+  const [editMontant, setEditMontant] = useState('')
+  const [editDate, setEditDate]       = useState('')
 
   useEffect(() => {
     Promise.all([fetchMembres(), fetchSlots(), fetchHistorique()]).then(() => setLoading(false))
@@ -137,6 +145,46 @@ export default function ActiviteGroupe() {
     setParticipants([])
     setMontantTotal('')
     fetchSlots()
+    fetchHistorique()
+  }
+
+  const startEdit = (a) => {
+    setEditingId(a.id)
+    setEditMontant(String(a.montant_total))
+    setEditDate(toInputDateTime(new Date(a.created_at)))
+    setMsg({ type: '', text: '' })
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditMontant('')
+    setEditDate('')
+  }
+
+  const saveEdit = async (a) => {
+    const total = parseFloat(editMontant)
+    if (!total || total <= 0) { setMsg({ type: 'error', text: 'Montant invalide.' }); return }
+    if (!editDate) { setMsg({ type: 'error', text: 'Date invalide.' }); return }
+
+    const newDate = new Date(editDate)
+    const newPart = Math.round((total / a.nb_participants) * 100) / 100
+
+    const { error } = await supabase.from('activites_groupe').update({
+      montant_total: total,
+      montant_part:  newPart,
+      created_at:    newDate.toISOString(),
+    }).eq('id', a.id)
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
+
+    if (a.activite_ids && a.activite_ids.length > 0) {
+      await supabase.from('activites').update({
+        somme_argent_sale: newPart,
+        heure_faite:       localDateStr(newDate),
+      }).in('id', a.activite_ids)
+    }
+
+    setMsg({ type: 'success', text: 'Activité de groupe mise à jour.' })
+    setEditingId(null)
     fetchHistorique()
   }
 
@@ -299,15 +347,39 @@ export default function ActiviteGroupe() {
                   <tr key={a.id}>
                     <td><span className="badge badge-vert">{a.type_code}</span></td>
                     <td style={{ color: 'var(--texte-soft)' }}>{a.slot ? `n°${a.slot}` : '—'}</td>
-                    <td style={{ fontSize: 12, color: 'var(--texte-soft)' }} title={fmtDateLong(a.created_at)}>{fmtDate(a.created_at)}</td>
-                    <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(a.montant_total)}</td>
-                    <td style={{ color: 'var(--or)' }}>{fmt(a.montant_part)}</td>
+                    <td style={{ fontSize: 12, color: 'var(--texte-soft)' }} title={fmtDateLong(a.created_at)}>
+                      {editingId === a.id ? (
+                        <input type="datetime-local" className="form-input" style={{ fontSize: 12, padding: '4px 6px' }}
+                          value={editDate} onChange={e => setEditDate(e.target.value)} />
+                      ) : fmtDate(a.created_at)}
+                    </td>
+                    <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>
+                      {editingId === a.id ? (
+                        <input type="number" min="0" step="1" className="form-input" style={{ fontSize: 12, padding: '4px 6px', width: 100 }}
+                          value={editMontant} onChange={e => setEditMontant(e.target.value)} />
+                      ) : fmt(a.montant_total)}
+                    </td>
+                    <td style={{ color: 'var(--or)' }}>
+                      {editingId === a.id ? fmt((parseFloat(editMontant) || 0) / a.nb_participants) : fmt(a.montant_part)}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--texte-soft)', maxWidth: 280 }}>
                       {(a.participants || []).map(p => p.surnom).join(', ')}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--texte-soft)' }}>{a.cree_par_surnom || '—'}</td>
                     {isDirection && (
-                      <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(a)}>✕</button></td>
+                      <td>
+                        {editingId === a.id ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn btn-solid btn-sm" onClick={() => saveEdit(a)}>✓</button>
+                            <button className="btn btn-or btn-sm" onClick={cancelEdit}>✕</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn btn-or btn-sm" onClick={() => startEdit(a)}>✎</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(a)}>✕</button>
+                          </div>
+                        )}
+                      </td>
                     )}
                   </tr>
                 ))}
