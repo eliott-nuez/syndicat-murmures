@@ -211,9 +211,9 @@ const NAV_DIRECTION = [
 // Sous-menu "Stock" — regroupe la gestion des biens du gang
 const STOCK_ITEMS = [
   { to: '/stock',      label: 'Stock & Catalogue', icon: <IcoStock />,     roles: ['responsable', 'direction'] },
-  { to: '/armurerie',  label: 'Armurerie',         icon: <IcoArmurerie />, roles: ['responsable', 'direction'] },
-  { to: '/vehicules',  label: 'Véhicule',          icon: <IcoVehicule />,  roles: ['responsable', 'direction'] },
-  { to: '/garage',     label: 'Garage',            icon: <IcoGarage />,    roles: ['responsable', 'direction'] },
+  { to: '/armurerie',  label: 'Armurerie',         icon: <IcoArmurerie />, roles: ['membre', 'responsable', 'direction'] },
+  { to: '/vehicules',  label: 'Véhicule',          icon: <IcoVehicule />,  roles: ['membre', 'responsable', 'direction'] },
+  { to: '/garage',     label: 'Garage',            icon: <IcoGarage />,    roles: ['membre', 'responsable', 'direction'] },
   { to: '/logs',       label: 'Logs mouvements',   icon: <IcoLogs />,      roles: ['responsable', 'direction'] },
 ]
 

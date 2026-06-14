@@ -64,13 +64,13 @@ export default function App() {
           <AppLayout roles={['responsable','direction']}><Stock /></AppLayout>
         } />
         <Route path="/armurerie" element={
-          <AppLayout roles={['responsable','direction']}><Armurerie /></AppLayout>
+          <AppLayout roles={['membre','responsable','direction']}><Armurerie /></AppLayout>
         } />
         <Route path="/vehicules" element={
-          <AppLayout roles={['responsable','direction']}><Vehicule /></AppLayout>
+          <AppLayout roles={['membre','responsable','direction']}><Vehicule /></AppLayout>
         } />
         <Route path="/garage" element={
-          <AppLayout roles={['responsable','direction']}><Garage /></AppLayout>
+          <AppLayout roles={['membre','responsable','direction']}><Garage /></AppLayout>
         } />
         <Route path="/logs" element={
           <AppLayout roles={['responsable','direction']}><Logs /></AppLayout>

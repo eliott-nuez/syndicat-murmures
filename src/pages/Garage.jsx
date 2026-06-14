@@ -4,6 +4,9 @@ import { supabase } from '../supabaseClient'
 const VIDE_GARAGE = { id_garage: '', lieu: '', numero: '', nombre_places: '' }
 
 export default function Garage() {
+  const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  const isResponsable = ['responsable', 'direction'].includes(membre.rang)
+
   const [garages, setGarages]         = useState([])
   const [emplacements, setEmplacements] = useState([])
   const [voitures, setVoitures]       = useState([])
@@ -137,14 +140,16 @@ export default function Garage() {
           <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.25em', color: 'var(--or-sombre)', marginBottom: 6 }}>Stock</div>
           <h1 style={{ fontFamily: 'var(--font-titre)', fontSize: 24, color: 'var(--or-pale)', letterSpacing: '0.05em' }}>Garage</h1>
         </div>
-        <button className="btn btn-solid btn-sm" onClick={() => { setShowForm(!showForm); setMsg({ type: '', text: '' }) }}>
-          {showForm ? '✕ Annuler' : '+ Nouveau garage'}
-        </button>
+        {isResponsable && (
+          <button className="btn btn-solid btn-sm" onClick={() => { setShowForm(!showForm); setMsg({ type: '', text: '' }) }}>
+            {showForm ? '✕ Annuler' : '+ Nouveau garage'}
+          </button>
+        )}
       </div>
 
       {msg.text && <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`}>{msg.text}</div>}
 
-      {showForm && (
+      {isResponsable && showForm && (
         <div className="card">
           <div className="card-title">Nouveau garage</div>
           <form onSubmit={handleCreateGarage}>
@@ -196,14 +201,16 @@ export default function Garage() {
                   {g.lieu || 'Lieu non renseigné'} · {slots.length} emplacement{slots.length > 1 ? 's' : ''}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-or btn-sm" disabled={addingSlotFor === g.id} onClick={() => handleAddEmplacement(g)}>
-                  {addingSlotFor === g.id ? '...' : '+ Emplacement'}
-                </button>
-                <button className="btn btn-danger btn-sm" disabled={deletingGarageId === g.id} onClick={() => handleDeleteGarage(g)}>
-                  {deletingGarageId === g.id ? '...' : '🗑 Supprimer'}
-                </button>
-              </div>
+              {isResponsable && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-or btn-sm" disabled={addingSlotFor === g.id} onClick={() => handleAddEmplacement(g)}>
+                    {addingSlotFor === g.id ? '...' : '+ Emplacement'}
+                  </button>
+                  <button className="btn btn-danger btn-sm" disabled={deletingGarageId === g.id} onClick={() => handleDeleteGarage(g)}>
+                    {deletingGarageId === g.id ? '...' : '🗑 Supprimer'}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="grid-5">
@@ -248,14 +255,16 @@ export default function Garage() {
                             <div style={{ fontSize: 12, color: 'var(--texte-soft)' }}>{v.immatriculation || '—'}</div>
                           </div>
                           <span className={`badge ${emp.present ? 'badge-vert' : 'badge-rouge'}`}
-                            style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            onClick={() => toggleStatutAssigne(emp)}>
+                            style={{ cursor: isResponsable ? 'pointer' : 'default', whiteSpace: 'nowrap' }}
+                            onClick={isResponsable ? () => toggleStatutAssigne(emp) : undefined}>
                             {emp.present ? 'Garage' : 'Sorti'}
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--texte-soft)' }}>
                           Emplacement n°{emp.numero}
-                          <button className="btn btn-or btn-sm" style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11 }} onClick={() => startEditEmplacement(emp)}>✎</button>
+                          {isResponsable && (
+                            <button className="btn btn-or btn-sm" style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11 }} onClick={() => startEditEmplacement(emp)}>✎</button>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -263,14 +272,16 @@ export default function Garage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ fontWeight: 500 }}>Emplacement n°{emp.numero}</div>
                           <span className={`badge ${emp.occupant_plaque ? 'badge-rouge' : 'badge-vert'}`}
-                            style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            onClick={() => toggleStatutLibre(emp)}>
+                            style={{ cursor: isResponsable ? 'pointer' : 'default', whiteSpace: 'nowrap' }}
+                            onClick={isResponsable ? () => toggleStatutLibre(emp) : undefined}>
                             {emp.occupant_plaque ? `Occupé : ${emp.occupant_plaque}` : 'Libre'}
                           </span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--texte-soft)' }}>
                           Place véhicule perso
-                          <button className="btn btn-or btn-sm" style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11 }} onClick={() => startEditEmplacement(emp)}>✎</button>
+                          {isResponsable && (
+                            <button className="btn btn-or btn-sm" style={{ marginLeft: 8, padding: '2px 8px', fontSize: 11 }} onClick={() => startEditEmplacement(emp)}>✎</button>
+                          )}
                         </div>
                       </>
                     )}
@@ -278,17 +289,21 @@ export default function Garage() {
                 )
               })}
               {slots.length === 0 && (
-                <div style={{ color: 'var(--texte-soft)', fontSize: 13, padding: 12 }}>Aucun emplacement. Clique sur « + Emplacement » pour en ajouter.</div>
+                <div style={{ color: 'var(--texte-soft)', fontSize: 13, padding: 12 }}>
+                  {isResponsable ? 'Aucun emplacement. Clique sur « + Emplacement » pour en ajouter.' : 'Aucun emplacement.'}
+                </div>
               )}
             </div>
           </div>
         )
       })}
 
-      <div style={{ fontSize: 11, color: 'var(--texte-soft)' }}>
-        Clique sur ✎ pour assigner un véhicule du catalogue à un emplacement (sinon il reste « libre » pour un véhicule personnel).
-        Les badges « Garage / Sorti » et « Libre / Occupé » se mettront bientôt à jour automatiquement via le Bot Murmures ; en attendant, clique dessus pour les basculer manuellement.
-      </div>
+      {isResponsable && (
+        <div style={{ fontSize: 11, color: 'var(--texte-soft)' }}>
+          Clique sur ✎ pour assigner un véhicule du catalogue à un emplacement (sinon il reste « libre » pour un véhicule personnel).
+          Les badges « Garage / Sorti » et « Libre / Occupé » se mettront bientôt à jour automatiquement via le Bot Murmures ; en attendant, clique dessus pour les basculer manuellement.
+        </div>
+      )}
     </div>
   )
 }

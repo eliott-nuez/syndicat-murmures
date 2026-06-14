@@ -4,6 +4,9 @@ import { supabase } from '../supabaseClient'
 const VIDE = { immatriculation: '', modele_jeu: '', modele_discord: '', image: '' }
 
 export default function Vehicule() {
+  const membre = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
+  const isResponsable = ['responsable', 'direction'].includes(membre.rang)
+
   const [vehicules, setVehicules] = useState([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -97,14 +100,16 @@ export default function Vehicule() {
           <div style={{ fontFamily: 'var(--font-titre)', fontSize: 11, letterSpacing: '0.25em', color: 'var(--or-sombre)', marginBottom: 6 }}>Stock</div>
           <h1 style={{ fontFamily: 'var(--font-titre)', fontSize: 24, color: 'var(--or-pale)', letterSpacing: '0.05em' }}>Véhicules</h1>
         </div>
-        <button className="btn btn-solid btn-sm" onClick={() => { setShowForm(!showForm); setMsg({ type: '', text: '' }) }}>
-          {showForm ? '✕ Annuler' : '+ Nouveau véhicule'}
-        </button>
+        {isResponsable && (
+          <button className="btn btn-solid btn-sm" onClick={() => { setShowForm(!showForm); setMsg({ type: '', text: '' }) }}>
+            {showForm ? '✕ Annuler' : '+ Nouveau véhicule'}
+          </button>
+        )}
       </div>
 
       {msg.text && <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`}>{msg.text}</div>}
 
-      {showForm && (
+      {isResponsable && showForm && (
         <div className="card">
           <div className="card-title">Nouveau véhicule</div>
           <form onSubmit={handleCreate}>
@@ -157,7 +162,7 @@ export default function Vehicule() {
                 <th>Immatriculation</th>
                 <th>Modèle en jeu</th>
                 <th>Modèle Discord</th>
-                <th style={{ width: 170 }}></th>
+                {isResponsable && <th style={{ width: 170 }}></th>}
               </tr>
             </thead>
             <tbody>
@@ -191,21 +196,23 @@ export default function Vehicule() {
                         <td style={{ fontWeight: 500 }}>{v.immatriculation || '—'}</td>
                         <td>{v.modele_jeu || '—'}</td>
                         <td style={{ color: 'var(--texte-soft)' }}>{v.modele_discord || '—'}</td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-or btn-sm" onClick={() => startEdit(v)}>✎ Modifier</button>
-                            <button className="btn btn-danger btn-sm" disabled={deletingId === v.id} onClick={() => handleDelete(v.id)}>
-                              {deletingId === v.id ? '...' : '🗑'}
-                            </button>
-                          </div>
-                        </td>
+                        {isResponsable && (
+                          <td>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="btn btn-or btn-sm" onClick={() => startEdit(v)}>✎ Modifier</button>
+                              <button className="btn btn-danger btn-sm" disabled={deletingId === v.id} onClick={() => handleDelete(v.id)}>
+                                {deletingId === v.id ? '...' : '🗑'}
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </>
                     )}
                   </tr>
                 )
               })}
               {vehiculesFiltres.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>
+                <tr><td colSpan={isResponsable ? 5 : 4} style={{ textAlign: 'center', color: 'var(--texte-soft)', padding: 20 }}>
                   {search ? 'Aucun résultat.' : 'Aucun véhicule enregistré.'}
                 </td></tr>
               )}
