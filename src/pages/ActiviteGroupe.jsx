@@ -29,6 +29,7 @@ export default function ActiviteGroupe() {
   const [type, setType]               = useState('Fleeca')
   const [participants, setParticipants] = useState([])
   const [montantTotal, setMontantTotal] = useState('')
+  const [commentaire, setCommentaire] = useState('')
   const [saving, setSaving]           = useState(false)
   const [msg, setMsg]                 = useState({ type: '', text: '' })
   const [showAll, setShowAll]         = useState(false)
@@ -37,6 +38,7 @@ export default function ActiviteGroupe() {
   const [editMontant, setEditMontant] = useState('')
   const [editDate, setEditDate]       = useState('')
   const [editParticipants, setEditParticipants] = useState([])
+  const [editCommentaire, setEditCommentaire] = useState('')
 
   useEffect(() => {
     Promise.all([fetchMembres(), fetchSlots(), fetchHistorique()]).then(() => setLoading(false))
@@ -138,6 +140,7 @@ export default function ActiviteGroupe() {
       activite_ids:    (actsInserted || []).map(a => a.id),
       cree_par:        membre.id,
       cree_par_surnom: membre.surnom,
+      commentaire:     commentaire.trim() || null,
     })
     setSaving(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
@@ -145,6 +148,7 @@ export default function ActiviteGroupe() {
     setMsg({ type: 'success', text: `${type} (timer n°${choisi.slot}) enregistré : ${fmt(total)} divisé entre ${participants.length} membre(s) — ${fmt(part)} chacun, ajouté à leur comptabilité.` })
     setParticipants([])
     setMontantTotal('')
+    setCommentaire('')
     fetchSlots()
     fetchHistorique()
   }
@@ -154,6 +158,7 @@ export default function ActiviteGroupe() {
     setEditMontant(String(a.montant_total))
     setEditDate(toInputDateTime(new Date(a.created_at)))
     setEditParticipants((a.participants || []).map(p => p.membre_id))
+    setEditCommentaire(a.commentaire || '')
     setMsg({ type: '', text: '' })
   }
 
@@ -162,6 +167,7 @@ export default function ActiviteGroupe() {
     setEditMontant('')
     setEditDate('')
     setEditParticipants([])
+    setEditCommentaire('')
   }
 
   const toggleEditParticipant = (id) => {
@@ -222,6 +228,7 @@ export default function ActiviteGroupe() {
       participants:    participantsData,
       activite_ids:    [...toKeepIds, ...newIds],
       created_at:      newDate.toISOString(),
+      commentaire:     editCommentaire.trim() || null,
     }).eq('id', a.id)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
 
@@ -341,6 +348,13 @@ export default function ActiviteGroupe() {
             </div>
           </div>
 
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label className="form-label">Commentaire (optionnel)</label>
+            <textarea className="form-input" rows={2}
+              placeholder="Ex : déroulement, infos utiles..."
+              value={commentaire} onChange={e => setCommentaire(e.target.value)} />
+          </div>
+
           {nbPart > 0 && total > 0 && (
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -382,7 +396,7 @@ export default function ActiviteGroupe() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Type</th><th>Timer</th><th>Date</th><th>Butin total</th><th>Part / pers.</th><th>Présents</th><th>Enregistré par</th>{isDirection && <th></th>}</tr>
+                <tr><th>Type</th><th>Timer</th><th>Date</th><th>Butin total</th><th>Part / pers.</th><th>Présents</th><th>Commentaire</th><th>Enregistré par</th>{isDirection && <th></th>}</tr>
               </thead>
               <tbody>
                 {(showAll ? historique : historique.slice(0, 5)).map(a => (
@@ -426,6 +440,12 @@ export default function ActiviteGroupe() {
                           })}
                         </div>
                       ) : (a.participants || []).map(p => p.surnom).join(', ')}
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--texte-soft)', maxWidth: 220 }}>
+                      {editingId === a.id ? (
+                        <textarea className="form-input" rows={1} style={{ fontSize: 12, padding: '4px 6px', minWidth: 160 }}
+                          value={editCommentaire} onChange={e => setEditCommentaire(e.target.value)} />
+                      ) : (a.commentaire || '—')}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--texte-soft)' }}>{a.cree_par_surnom || '—'}</td>
                     {isDirection && (
