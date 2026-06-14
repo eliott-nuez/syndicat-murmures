@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 const TYPES = ['Fleeca', 'Ammunation']
-const COOLDOWN_HEURES   = 7 * 24  // emplacement utilisé : indisponible 7 jours
-const BATTEMENT_HEURES  = 3       // autre emplacement (si dispo) : indisponible 3h
+const COOLDOWN_HEURES = 7 * 24  // emplacement utilisé : indisponible 7 jours
 
 function localDateStr(d) {
   const pad = n => String(n).padStart(2, '0')
@@ -94,8 +93,6 @@ export default function ActiviteGroupe() {
       setMsg({ type: 'error', text: `Aucun timer ${type} disponible pour le moment.` })
       return
     }
-    const autre = sl.find(s => s.id !== choisi.id)
-
     setSaving(true)
     const part = Math.round((total / participants.length) * 100) / 100
     const participantsData = participants.map(pid => {
@@ -123,13 +120,7 @@ export default function ActiviteGroupe() {
     // 2. Met à jour le timer de l'emplacement utilisé (7 jours)
     await supabase.from('activites_groupe_slots').update({ disponible_a: dispoMaj.toISOString() }).eq('id', choisi.id)
 
-    // 3. Battement de 3h sur l'autre emplacement, s'il était disponible
-    if (autre && estDisponible(autre)) {
-      const dispoAutre = ajouteHeures(now, BATTEMENT_HEURES)
-      await supabase.from('activites_groupe_slots').update({ disponible_a: dispoAutre.toISOString() }).eq('id', autre.id)
-    }
-
-    // 4. Enregistre l'activité de groupe avec le lien vers les lignes de compta créées
+    // 3. Enregistre l'activité de groupe avec le lien vers les lignes de compta créées
     const { error } = await supabase.from('activites_groupe').insert({
       type_code:       type,
       slot:            choisi.slot,
@@ -266,8 +257,7 @@ export default function ActiviteGroupe() {
           Fleeca & Ammunation
         </h1>
         <p style={{ marginTop: 8, fontSize: 13, color: 'var(--texte-soft)' }}>
-          Chaque type dispose de 2 timers. Après un braquage, le timer utilisé devient indisponible pendant <strong style={{ color: 'var(--or-pale)' }}>7 jours</strong>,
-          et l'autre timer (s'il était disponible) passe en battement de <strong style={{ color: 'var(--or-pale)' }}>3 heures</strong>.
+          Chaque type dispose de 2 timers. Après un braquage, le timer utilisé devient indisponible pendant <strong style={{ color: 'var(--or-pale)' }}>7 jours</strong>.
           Le butin est partagé entre les présents et ajouté directement à leur comptabilité.
         </p>
       </div>
