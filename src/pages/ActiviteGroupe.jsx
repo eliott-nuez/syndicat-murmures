@@ -223,8 +223,17 @@ export default function ActiviteGroupe() {
     }).eq('id', a.id)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
 
+    // Recale le timer du créneau utilisé sur la nouvelle date (7 jours)
+    if (a.slot) {
+      const nouvelleDispo = ajouteHeures(newDate, COOLDOWN_HEURES)
+      await supabase.from('activites_groupe_slots')
+        .update({ disponible_a: nouvelleDispo.toISOString() })
+        .eq('type_code', a.type_code).eq('slot', a.slot)
+    }
+
     setMsg({ type: 'success', text: 'Activité de groupe mise à jour.' })
     setEditingId(null)
+    fetchSlots()
     fetchHistorique()
   }
 
