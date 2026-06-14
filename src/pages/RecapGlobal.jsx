@@ -229,11 +229,11 @@ export default function RecapGlobal() {
                   <tr>
                     <SortTh label="Joueur"             k="surnom" />
                     <SortTh label="Rang"               k="rang" />
-                    <SortTh label="Nb activités"       k="nbActivites" />
                     <SortTh label="Activités $"        k="totalAct" />
                     <SortTh label="Ventes (bénéf.)"    k="totalBenefice" />
                     <SortTh label="Plantations"        k="totalPlantations" />
                     <SortTh label="Commission"         k="commission" />
+                    <SortTh label="Nb activités"       k="nbActivites" />
                     <SortTh label="nb Branches" k="nbBranches" />
                     <SortTh label="nb Drogues"  k="nbUnites" />
                     <SortTh label="Quota"              k="quotaOk" />
@@ -251,7 +251,6 @@ export default function RecapGlobal() {
                           {r.rang}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center' }}>{r.nbActivites}</td>
                       <td>{fmt(r.totalAct)}</td>
                       <td>{fmt(r.totalBenefice)}</td>
                       <td style={{ color: r.totalPlantations > 0 ? 'var(--or-pale)' : 'var(--texte-soft)' }}>
@@ -261,6 +260,7 @@ export default function RecapGlobal() {
                         − {fmt(r.commission)}
                         <span style={{ fontSize: 10, opacity: 0.7 }}> ({r.commission_pct.toFixed(1)}%)</span>
                       </td>
+                      <td style={{ textAlign: 'center' }}>{r.nbActivites}</td>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>
                         {r.nbBranches.toLocaleString('fr-FR')}
                       </td>
@@ -286,13 +286,16 @@ export default function RecapGlobal() {
                 </tbody>
                 <tfoot>
                   <tr style={{ borderTop: '2px solid var(--or-border)' }}>
-                    <td colSpan={3} style={{ color: 'var(--or)', fontWeight: 600, padding: '12px 14px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    <td colSpan={2} style={{ color: 'var(--or)', fontWeight: 600, padding: '12px 14px', fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                       Totaux
                     </td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalAct)}</td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalBenefice)}</td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(totaux.totalPlantations)}</td>
                     <td style={{ color: '#e8a84c',       fontWeight: 600 }}>− {fmt(totaux.commission)}</td>
+                    <td style={{ textAlign: 'center', color: 'var(--or-pale)', fontWeight: 600 }}>
+                      {recaps.reduce((s, r) => s + r.nbActivites, 0).toLocaleString('fr-FR')}
+                    </td>
                     <td style={{ textAlign: 'center', color: 'var(--or-pale)', fontWeight: 600 }}>
                       {recaps.reduce((s, r) => s + r.nbBranches, 0).toLocaleString('fr-FR')}
                     </td>
