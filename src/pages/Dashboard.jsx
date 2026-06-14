@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 import { chargerQuotas } from '../utils/quotas'
+import { getRangEffectif } from '../utils/viewAs'
 import ContratsSuiviTable from '../components/ContratsSuiviTable'
 
 // Types d'activites avec leurs cooldowns (en heures)
@@ -43,8 +44,14 @@ function getDispoStatus(prochainDispo) {
 
 export default function Dashboard() {
   const membre      = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
-  const isDirection = membre.rang === 'direction'
-  const isResponsableOuDirection = ['responsable', 'direction'].includes(membre.rang)
+  const [rangEffectif, setRangEffectif] = useState(getRangEffectif() || membre.rang)
+  useEffect(() => {
+    const handler = () => setRangEffectif(getRangEffectif() || membre.rang)
+    window.addEventListener('sdm_view_as_change', handler)
+    return () => window.removeEventListener('sdm_view_as_change', handler)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const isDirection = rangEffectif === 'direction'
+  const isResponsableOuDirection = ['responsable', 'direction'].includes(rangEffectif)
 
   const [dispos, setDispos]             = useState({})
   const [groupeSlots, setGroupeSlots]   = useState([])
