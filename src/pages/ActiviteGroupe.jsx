@@ -1,25 +1,17 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { getDebutSemaine } from '../utils/temps'
 
 const TYPES = ['Fleeca', 'Ammunation']
-const LIMITE_GROUPE  = 2   // max par semaine pour le groupe entier
-const LIMITE_MEMBRE  = 1   // max par semaine par membre
+const COOLDOWN_HEURES   = 7 * 24  // emplacement utilisé : indisponible 7 jours
+const BATTEMENT_HEURES  = 3       // autre emplacement (si dispo) : indisponible 3h
 
 function localDateStr(d) {
   const pad = n => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-// Lundi prochain 00h01 (heure de Paris) — date "fin d'indisponibilité"
-function getProchaineDispoGroupe() {
-  const now   = new Date()
-  const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }))
-  const dow   = paris.getDay() || 7
-  paris.setDate(paris.getDate() + (8 - dow))
-  paris.setHours(0, 1, 0, 0)
-  const offset = now - new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }))
-  return new Date(paris.getTime() + offset)
+function ajouteHeures(date, heures) {
+  return new Date(date.getTime() + heures * 3600 * 1000)
 }
 
 export default function ActiviteGroupe() {
@@ -27,6 +19,7 @@ export default function ActiviteGroupe() {
   const isDirection = membre.rang === 'direction'
 
   const [membres, setMembres]         = useState([])
+  const [slots, setSlots]             = useState([])
   const [historique, setHistorique]   = useState([])
   const [type, setType]               = useState('Fleeca')
   const [participants, setParticipants] = useState([])
@@ -37,7 +30,7 @@ export default function ActiviteGroupe() {
   const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
-    Promise.all([fetchMembres(), fetchHistorique()]).then(() => setLoading(false))
+    Promise.all([fetchMembres(), fetchSlots(), fetchHistorique()]).then(() => setLoading(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchMembres = async () => {
@@ -45,10 +38,15 @@ export default function ActiviteGroupe() {
     setMembres(data || [])
   }
 
+  const fetchSlots = async () => {
+    const { data } = await supabase.from('activites_groupe_slots').select('*').order('type_code').order('slot')
+    setSlots(data || [])
+  }
+
   const fetchHistorique = async () => {
     const { data } = await supabase.from('activites_groupe').select('*')
-      .gte('created_at', getDebutSemaine().toISOString())
       .order('created_at', { ascending: false })
+      .limit(50)
     setHistorique(data || [])
   }
 
@@ -59,14 +57,13 @@ export default function ActiviteGroupe() {
   const fmtDateLong = (d) =>
     new Date(d).toLocaleString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
-  // ── Disponibilité par type ──
+  // ── Emplacements / disponibilité par type ──
+  const slotsDuType = (t) => slots.filter(s => s.type_code === t).sort((a, b) => a.slot - b.slot)
+  const estDisponible = (slot) => !slot.disponible_a || new Date(slot.disponible_a) <= new Date()
   const infosType = (t) => {
-    const acts          = historique.filter(a => a.type_code === t)
-    const groupeCount   = acts.length
-    const groupeBloque  = groupeCount >= LIMITE_GROUPE
-    const dejaParticipe = acts.some(a => (a.participants || []).some(p => p.membre_id === membre.id))
-    const dispo         = !groupeBloque && !dejaParticipe
-    return { groupeCount, groupeBloque, dejaParticipe, dispo }
+    const sl    = slotsDuType(t)
+    const dispo = sl.some(estDisponible)
+    return { slots: sl, dispo }
   }
 
   const toggleParticipant = (id) => {
@@ -80,19 +77,13 @@ export default function ActiviteGroupe() {
     if (!total || total <= 0) { setMsg({ type: 'error', text: 'Montant total invalide.' }); return }
     if (participants.length === 0) { setMsg({ type: 'error', text: 'Sélectionnez au moins un participant.' }); return }
 
-    const info = infosType(type)
-    if (info.groupeBloque) {
-      setMsg({ type: 'error', text: `Limite atteinte : le groupe a déjà fait ${LIMITE_GROUPE} ${type} cette semaine. Indisponible jusqu'à lundi 00h01 pour tout le monde.` })
+    const sl     = slotsDuType(type)
+    const choisi = sl.find(estDisponible)
+    if (!choisi) {
+      setMsg({ type: 'error', text: `Aucun emplacement ${type} disponible pour le moment.` })
       return
     }
-
-    const acts = historique.filter(a => a.type_code === type)
-    const dejaFait = participants.filter(pid => acts.some(a => (a.participants || []).some(p => p.membre_id === pid)))
-    if (dejaFait.length > 0) {
-      const noms = dejaFait.map(pid => membres.find(m => m.id === pid)?.surnom || '?').join(', ')
-      setMsg({ type: 'error', text: `${noms} ${dejaFait.length > 1 ? 'ont' : 'a'} déjà participé à un(e) ${type} cette semaine (limite ${LIMITE_MEMBRE}/semaine/membre).` })
-      return
-    }
+    const autre = sl.find(s => s.id !== choisi.id)
 
     setSaving(true)
     const part = Math.round((total / participants.length) * 100) / 100
@@ -101,9 +92,10 @@ export default function ActiviteGroupe() {
       return { membre_id: pid, surnom: m?.surnom || '?' }
     })
 
-    const dispoDate = getProchaineDispoGroupe()
-    const dispoStr  = localDateStr(dispoDate)
-    const heureStr  = localDateStr(new Date())
+    const now       = new Date()
+    const dispoMaj  = ajouteHeures(now, COOLDOWN_HEURES)
+    const dispoStr  = localDateStr(dispoMaj)
+    const heureStr  = localDateStr(now)
 
     // 1. Insère les lignes de comptabilité (table activites) pour chaque présent
     const lignesActs = participantsData.map(p => ({
@@ -117,9 +109,19 @@ export default function ActiviteGroupe() {
     const { data: actsInserted, error: errActs } = await supabase.from('activites').insert(lignesActs).select('id')
     if (errActs) { setMsg({ type: 'error', text: 'Erreur compta : ' + errActs.message }); setSaving(false); return }
 
-    // 2. Enregistre l'activité de groupe avec le lien vers les lignes de compta créées
+    // 2. Met à jour le timer de l'emplacement utilisé (7 jours)
+    await supabase.from('activites_groupe_slots').update({ disponible_a: dispoMaj.toISOString() }).eq('id', choisi.id)
+
+    // 3. Battement de 3h sur l'autre emplacement, s'il était disponible
+    if (autre && estDisponible(autre)) {
+      const dispoAutre = ajouteHeures(now, BATTEMENT_HEURES)
+      await supabase.from('activites_groupe_slots').update({ disponible_a: dispoAutre.toISOString() }).eq('id', autre.id)
+    }
+
+    // 4. Enregistre l'activité de groupe avec le lien vers les lignes de compta créées
     const { error } = await supabase.from('activites_groupe').insert({
       type_code:       type,
+      slot:            choisi.slot,
       montant_total:   total,
       montant_part:    part,
       nb_participants: participants.length,
@@ -131,9 +133,10 @@ export default function ActiviteGroupe() {
     setSaving(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
 
-    setMsg({ type: 'success', text: `${type} enregistré : ${fmt(total)} divisé entre ${participants.length} membre(s) — ${fmt(part)} chacun, ajouté à leur comptabilité.` })
+    setMsg({ type: 'success', text: `${type} (emplacement n°${choisi.slot}) enregistré : ${fmt(total)} divisé entre ${participants.length} membre(s) — ${fmt(part)} chacun, ajouté à leur comptabilité.` })
     setParticipants([])
     setMontantTotal('')
+    fetchSlots()
     fetchHistorique()
   }
 
@@ -166,10 +169,9 @@ export default function ActiviteGroupe() {
           Fleeca & Ammunation
         </h1>
         <p style={{ marginTop: 8, fontSize: 13, color: 'var(--texte-soft)' }}>
-          Limite : {LIMITE_GROUPE} par semaine pour le groupe entier · {LIMITE_MEMBRE} par semaine et par membre.
+          Chaque type dispose de 2 emplacements. Après un braquage, l'emplacement utilisé devient indisponible pendant <strong style={{ color: 'var(--or-pale)' }}>7 jours</strong>,
+          et l'autre emplacement (s'il était disponible) passe en battement de <strong style={{ color: 'var(--or-pale)' }}>3 heures</strong>.
           Le butin est partagé entre les présents et ajouté directement à leur comptabilité.
-          Une fois faite, l'activité devient indisponible jusqu'au <strong style={{ color: 'var(--or-pale)' }}>lundi 00h01</strong> pour les participants
-          {' '}— et pour <strong style={{ color: 'var(--or-pale)' }}>tout le monde</strong> si le groupe atteint sa limite.
         </p>
       </div>
 
@@ -180,33 +182,23 @@ export default function ActiviteGroupe() {
           return (
             <div className="card" key={t}>
               <div className="card-title">{t}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--texte-soft)' }}>Réalisations du groupe cette semaine</span>
-                  <span style={{ color: info.groupeBloque ? '#e05555' : 'var(--or-pale)', fontWeight: 600 }}>
-                    {info.groupeCount} / {LIMITE_GROUPE}
-                  </span>
-                </div>
-                <div style={{ height: 8, borderRadius: 5, background: 'rgba(201,168,76,0.12)', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', borderRadius: 5,
-                    width: `${Math.min(100, Math.round(info.groupeCount / LIMITE_GROUPE * 100))}%`,
-                    background: info.groupeBloque ? 'linear-gradient(90deg,#a13f3f,#e05555)' : 'linear-gradient(90deg,#9c7d2e,#e8c97a)',
-                    transition: 'width 0.4s ease',
-                  }} />
-                </div>
-                <div style={{
-                  marginTop: 6, padding: '8px 12px', borderRadius: 6,
-                  background: info.dispo ? 'rgba(92,186,138,0.08)' : 'rgba(224,85,85,0.08)',
-                  border: `1px solid ${info.dispo ? 'rgba(92,186,138,0.35)' : 'rgba(224,85,85,0.35)'}`,
-                  color: info.dispo ? '#5cba8a' : '#e8a0a0', fontSize: 12, fontWeight: 600,
-                }}>
-                  {info.dispo
-                    ? '✓ Disponible pour vous'
-                    : info.groupeBloque
-                      ? '✗ Limite groupe atteinte — indisponible pour tous jusqu\'à lundi 00h01'
-                      : '✗ Vous avez déjà participé cette semaine — indisponible jusqu\'à lundi 00h01'}
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {info.slots.map(s => {
+                  const dispo = estDisponible(s)
+                  return (
+                    <div key={s.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '8px 12px', borderRadius: 6,
+                      background: dispo ? 'rgba(92,186,138,0.08)' : 'rgba(224,85,85,0.08)',
+                      border: `1px solid ${dispo ? 'rgba(92,186,138,0.35)' : 'rgba(224,85,85,0.35)'}`,
+                    }}>
+                      <span style={{ fontSize: 13, color: 'var(--texte-soft)' }}>Emplacement n°{s.slot}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: dispo ? '#5cba8a' : '#e8a0a0' }}>
+                        {dispo ? '✓ Disponible' : `✗ Indispo jusqu'au ${fmtDate(s.disponible_a)}`}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )
@@ -276,23 +268,21 @@ export default function ActiviteGroupe() {
 
           {!infoCourant.dispo && (
             <div className="alert alert-error" style={{ marginBottom: 16 }}>
-              ⚠ {infoCourant.groupeBloque
-                ? `Le groupe a atteint sa limite de ${LIMITE_GROUPE} ${type} cette semaine. Indisponible pour tous jusqu'à lundi 00h01.`
-                : `Vous avez déjà participé à un(e) ${type} cette semaine (limite ${LIMITE_MEMBRE}/membre).`}
+              ⚠ Aucun emplacement {type} disponible pour le moment.
             </div>
           )}
 
-          <button type="submit" className="btn btn-solid" disabled={saving || infoCourant.groupeBloque}>
+          <button type="submit" className="btn btn-solid" disabled={saving || !infoCourant.dispo}>
             {saving ? 'Enregistrement...' : `+ Valider le ${type}`}
           </button>
         </form>
       </div>
 
-      {/* Historique de la semaine */}
+      {/* Historique */}
       {historique.length > 0 && (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <div className="card-title" style={{ marginBottom: 0 }}>Historique de la semaine ({historique.length})</div>
+            <div className="card-title" style={{ marginBottom: 0 }}>Historique ({historique.length})</div>
             {historique.length > 5 && (
               <button className="btn btn-or btn-sm" onClick={() => setShowAll(v => !v)}>
                 {showAll ? 'Afficher moins' : `Afficher tout (${historique.length})`}
@@ -302,12 +292,13 @@ export default function ActiviteGroupe() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Type</th><th>Date</th><th>Butin total</th><th>Part / pers.</th><th>Présents</th><th>Enregistré par</th>{isDirection && <th></th>}</tr>
+                <tr><th>Type</th><th>Emplacement</th><th>Date</th><th>Butin total</th><th>Part / pers.</th><th>Présents</th><th>Enregistré par</th>{isDirection && <th></th>}</tr>
               </thead>
               <tbody>
                 {(showAll ? historique : historique.slice(0, 5)).map(a => (
                   <tr key={a.id}>
                     <td><span className="badge badge-vert">{a.type_code}</span></td>
+                    <td style={{ color: 'var(--texte-soft)' }}>{a.slot ? `n°${a.slot}` : '—'}</td>
                     <td style={{ fontSize: 12, color: 'var(--texte-soft)' }} title={fmtDateLong(a.created_at)}>{fmtDate(a.created_at)}</td>
                     <td style={{ color: 'var(--or-pale)', fontWeight: 600 }}>{fmt(a.montant_total)}</td>
                     <td style={{ color: 'var(--or)' }}>{fmt(a.montant_part)}</td>

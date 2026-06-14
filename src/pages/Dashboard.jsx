@@ -45,7 +45,7 @@ export default function Dashboard() {
   const isDirection = membre.rang === 'direction'
 
   const [dispos, setDispos]             = useState({})
-  const [groupeActs, setGroupeActs]     = useState([])
+  const [groupeSlots, setGroupeSlots]   = useState([])
   const [totauxGang, setTotauxGang]     = useState(null)
   const [connectes, setConnectes]       = useState('—')
   const [loading, setLoading]           = useState(true)
@@ -82,12 +82,13 @@ export default function Dashboard() {
     }
     setDispos(dispoMap)
 
-    // Activités de groupe de la semaine (Fleeca / Ammunation)
-    const { data: ag } = await supabase
-      .from('activites_groupe')
-      .select('type_code, participants, created_at')
-      .gte('created_at', getDebutSemaine().toISOString())
-    setGroupeActs(ag || [])
+    // Emplacements Fleeca / Ammunation (2 par type, avec leur timer)
+    const { data: slots } = await supabase
+      .from('activites_groupe_slots')
+      .select('type_code, slot, disponible_a')
+      .order('type_code')
+      .order('slot')
+    setGroupeSlots(slots || [])
 
     // Membres connectes (actif = true)
     const { count } = await supabase
@@ -205,23 +206,20 @@ export default function Dashboard() {
               Activités de groupe
             </div>
             {['Fleeca', 'Ammunation'].map(t => {
-              const acts          = groupeActs.filter(a => a.type_code === t)
-              const groupeBloque  = acts.length >= 2
-              const dejaParticipe = acts.some(a => (a.participants || []).some(p => p.membre_id === membre.id))
-              const dispo         = !groupeBloque && !dejaParticipe
-              return (
-                <div key={t} className="dispo-item">
-                  <div>
-                    <div className="dispo-name">{t}</div>
-                    <div style={{ fontSize: 11, color: 'var(--texte-soft)', marginTop: 2 }}>
-                      Groupe : {acts.length} / 2 cette semaine
+              const sl = groupeSlots.filter(s => s.type_code === t).sort((a, b) => a.slot - b.slot)
+              return sl.map(s => {
+                const status = getDispoStatus(s.disponible_a)
+                return (
+                  <div key={`${t}-${s.slot}`} className="dispo-item">
+                    <div>
+                      <div className="dispo-name">{t} — emplacement n°{s.slot}</div>
+                    </div>
+                    <div className={`dispo-time ${status.dispo ? 'dispo-ok' : 'dispo-wait'}`}>
+                      {status.dispo ? '✓ Disponible' : `⏳ ${status.label}`}
                     </div>
                   </div>
-                  <div className={`dispo-time ${dispo ? 'dispo-ok' : 'dispo-wait'}`}>
-                    {dispo ? '✓ Disponible' : groupeBloque ? '✗ Limite groupe' : '✗ Déjà fait'}
-                  </div>
-                </div>
-              )
+                )
+              })
             })}
           </div>
         </div>
