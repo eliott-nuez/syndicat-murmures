@@ -19,6 +19,8 @@ import FicheMembre    from './pages/FicheMembre'
 import Calendrier     from './pages/Calendrier'
 import VentesGroupe       from './pages/VentesGroupe'
 import ContratsFamilles   from './pages/ContratsFamilles'
+import ContratSuivi       from './pages/ContratSuivi'
+import ContratGestion     from './pages/ContratGestion'
 import Logs           from './pages/Logs'
 import Layout         from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -77,6 +79,12 @@ export default function App() {
         } />
         <Route path="/ventes-groupe" element={
           <AppLayout roles={['responsable','direction']}><VentesGroupe /></AppLayout>
+        } />
+        <Route path="/contrats/suivi" element={
+          <AppLayout roles={['responsable','direction']}><ContratSuivi /></AppLayout>
+        } />
+        <Route path="/contrats/gestion" element={
+          <AppLayout roles={['responsable','direction']}><ContratGestion /></AppLayout>
         } />
 
         {/* Direction uniquement */}

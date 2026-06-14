@@ -182,6 +182,26 @@ const IcoContrats = () => (
   </Ico>
 )
 
+/** Suivi semaine — Calendrier hebdomadaire */
+const IcoSuiviSemaine = () => (
+  <Ico>
+    <rect x="3" y="5" width="18" height="16" rx="1.5"/>
+    <path d="M3 10H21"/>
+    <path d="M8 3v4M16 3v4"/>
+    <path d="M7 14h2M11 14h2M15 14h2M7 17.5h2M11 17.5h2"/>
+  </Ico>
+)
+
+/** Gestion contrat — Parchemin signé */
+const IcoGestionContrat = () => (
+  <Ico>
+    <path d="M6 3h9l4 4v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/>
+    <path d="M15 3v4h4"/>
+    <path d="M8 12h8M8 15h8"/>
+    <path d="M8 18.5l2-1.2 2 1.2 2-1.2 2 1.2"/>
+  </Ico>
+)
+
 /** Administration — Parchemin scellé */
 const IcoAdmin = () => (
   <Ico>
@@ -215,6 +235,12 @@ const STOCK_ITEMS = [
   { to: '/vehicules',  label: 'Véhicule',          icon: <IcoVehicule />,  roles: ['membre', 'responsable', 'direction'] },
   { to: '/garage',     label: 'Garage',            icon: <IcoGarage />,    roles: ['membre', 'responsable', 'direction'] },
   { to: '/logs',       label: 'Logs mouvements',   icon: <IcoLogs />,      roles: ['responsable', 'direction'] },
+]
+
+// Sous-menu "Contrats" — gestion des contrats avec les groupes externes
+const CONTRAT_ITEMS = [
+  { to: '/contrats/suivi',   label: 'Suivi semaine',   icon: <IcoSuiviSemaine />,   roles: ['responsable', 'direction'] },
+  { to: '/contrats/gestion', label: 'Gestion contrat', icon: <IcoGestionContrat />, roles: ['responsable', 'direction'] },
 ]
 
 // Sous-menu "Finance" — regroupe les pages liées à l'argent / fiches
@@ -270,6 +296,7 @@ export default function Layout({ children }) {
 
   const financeChildren = FINANCE_ITEMS.filter(item => item.roles.includes(rang))
   const stockChildren   = STOCK_ITEMS.filter(item => item.roles.includes(rang))
+  const contratChildren = CONTRAT_ITEMS.filter(item => item.roles.includes(rang))
 
   const navItems = isFamilles
     ? [{ to: '/contrats-familles', label: 'Contrats', icon: <IcoContrats /> }]
@@ -280,6 +307,9 @@ export default function Layout({ children }) {
           : []),
         ...(stockChildren.length > 0
           ? [{ group: 'stock', label: 'Stock', icon: <IcoStock />, children: stockChildren }]
+          : []),
+        ...(contratChildren.length > 0
+          ? [{ group: 'contrats', label: 'Contrats', icon: <IcoContrats />, children: contratChildren }]
           : []),
         ...(isResponsable ? NAV_RESPONSABLE : []),
         ...(isDir         ? NAV_DIRECTION   : []),
