@@ -333,6 +333,37 @@ class ConsoModal(discord.ui.Modal, title='Nouveau consommable'):
             await interaction.response.send_message(f'Erreur : {e}', ephemeral=True)
 
 
+# ── Déduplication : une plaque ne peut occuper qu'un seul emplacement ────────
+async def reset_doublons_plaque(plaque: str, emp_id_a_garder: str):
+    """
+    Une voiture (identifiée par sa plaque) ne peut être garée qu'à un seul
+    emplacement à la fois. Si la plaque occupe déjà un autre emplacement
+    (place perso "occupant_plaque" ou place fixe "voiture_id"/present),
+    on le libère : place perso → disponible, place fixe → sortie.
+    """
+    # Places perso occupées par cette plaque ailleurs
+    r = await db(lambda: supabase.table('emplacements')
+        .select('id').ilike('occupant_plaque', plaque).execute())
+    for emp in (r.data or []):
+        if emp['id'] != emp_id_a_garder:
+            await db(lambda: supabase.table('emplacements').update({
+                'occupant_plaque': None, 'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('id', emp['id']).execute())
+
+    # Place(s) fixe(s) du catalogue marquées présentes pour cette plaque, ailleurs
+    rv = await db(lambda: supabase.table('voitures')
+        .select('id').ilike('immatriculation', plaque).limit(1).execute())
+    voiture = rv.data[0] if rv and rv.data else None
+    if voiture:
+        re_ = await db(lambda: supabase.table('emplacements')
+            .select('id').eq('voiture_id', voiture['id']).eq('present', True).execute())
+        for emp in (re_.data or []):
+            if emp['id'] != emp_id_a_garder:
+                await db(lambda: supabase.table('emplacements').update({
+                    'present': False, 'updated_at': datetime.now(timezone.utc).isoformat()
+                }).eq('id', emp['id']).execute())
+
+
 # ── Traitement des messages "Véhicules" (entrées/sorties garage) ─────────────
 async def process_vehicule_message(message: discord.Message, is_recovery: bool = False) -> str | None:
     """
@@ -388,6 +419,8 @@ async def process_vehicule_message(message: discord.Message, is_recovery: bool =
                     await db(lambda: supabase.table('emplacements').update({
                         'present': entree, 'updated_at': datetime.now(timezone.utc).isoformat()
                     }).eq('id', emp['id']).execute())
+                    if entree:
+                        await reset_doublons_plaque(plaque, emp['id'])
                     verbe = 'rentré' if entree else 'sorti'
                     nom_v = voiture.get('modele_jeu') or modele
                     line = f'**{personnage}** a {verbe} **{nom_v}** ({plaque}) — garage {id_garage}, place n°{emp["numero"]}'
@@ -433,6 +466,7 @@ async def process_vehicule_message(message: discord.Message, is_recovery: bool =
                         await db(lambda: supabase.table('emplacements').update({
                             'occupant_plaque': plaque, 'updated_at': datetime.now(timezone.utc).isoformat()
                         }).eq('id', emp['id']).execute())
+                        await reset_doublons_plaque(plaque, emp['id'])
                         line = f'**{personnage}** a garé **{modele}** ({plaque}) — garage {id_garage}, place perso n°{emp["numero"]}'
                     else:
                         emoji = '⚠️'
