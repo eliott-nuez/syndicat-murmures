@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 import { chargerQuotas } from '../utils/quotas'
+import ContratsSuiviTable from '../components/ContratsSuiviTable'
 
 // Types d'activites avec leurs cooldowns (en heures)
 // Modifier ici si les cooldowns changent
@@ -43,6 +44,7 @@ function getDispoStatus(prochainDispo) {
 export default function Dashboard() {
   const membre      = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const isDirection = membre.rang === 'direction'
+  const isResponsableOuDirection = ['responsable', 'direction'].includes(membre.rang)
 
   const [dispos, setDispos]             = useState({})
   const [groupeSlots, setGroupeSlots]   = useState([])
@@ -230,6 +232,14 @@ export default function Dashboard() {
           <RecapSemaineMini membreId={membre.id} />
         </div>
       </div>
+
+      {/* Suivi des contrats — responsable + direction */}
+      {isResponsableOuDirection && (
+        <div className="card" style={{ marginBottom: 28 }}>
+          <div className="card-title">Suivi des contrats</div>
+          <ContratsSuiviTable />
+        </div>
+      )}
 
       {/* Zones de vente / taxes */}
       <ZonesTaxes isDirection={isDirection} />
