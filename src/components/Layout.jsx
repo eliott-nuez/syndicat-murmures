@@ -172,7 +172,7 @@ const IcoChevron = ({ open }) => (
   </svg>
 )
 
-/** Contrats Familles — Calendrier avec coche */
+/** Contrats — Calendrier avec coche */
 const IcoContrats = () => (
   <Ico>
     <rect x="3" y="5" width="18" height="16" rx="1.5"/>
@@ -220,9 +220,6 @@ const IcoAdmin = () => (
 const NAV_TOUS = [
   { to: '/dashboard',        label: 'Dashboard',           icon: <IcoDashboard /> },
   { to: '/calendrier',       label: 'Calendrier',           icon: <IcoCalendrier /> },
-]
-const NAV_RESPONSABLE = [
-  { to: '/contrats-familles', label: 'Contrats Familles',  icon: <IcoContrats /> },
 ]
 const NAV_DIRECTION = [
   { to: '/admin', label: 'Administration', icon: <IcoAdmin /> },
@@ -273,9 +270,7 @@ export default function Layout({ children }) {
 
   const rang         = viewAs || rangReel   // rang effectif pour la nav
   const isDirection  = rangReel === 'direction'
-  const isResponsable = ['responsable', 'direction'].includes(rang)
   const isDir         = rang === 'direction'
-  const isFamilles    = rang === 'familles'
 
   const handleViewAs = (val) => {
     if (val === 'direction') { desactiverViewAs(); setViewAs(null) }
@@ -298,22 +293,19 @@ export default function Layout({ children }) {
   const stockChildren   = STOCK_ITEMS.filter(item => item.roles.includes(rang))
   const contratChildren = CONTRAT_ITEMS.filter(item => item.roles.includes(rang))
 
-  const navItems = isFamilles
-    ? [{ to: '/contrats-familles', label: 'Contrats', icon: <IcoContrats /> }]
-    : [
-        ...NAV_TOUS,
-        ...(financeChildren.length > 0
-          ? [{ group: 'finance', label: 'Finance', icon: <IcoFinance />, children: financeChildren }]
-          : []),
-        ...(stockChildren.length > 0
-          ? [{ group: 'stock', label: 'Stock', icon: <IcoStock />, children: stockChildren }]
-          : []),
-        ...(contratChildren.length > 0
-          ? [{ group: 'contrats', label: 'Contrats', icon: <IcoContrats />, children: contratChildren }]
-          : []),
-        ...(isResponsable ? NAV_RESPONSABLE : []),
-        ...(isDir         ? NAV_DIRECTION   : []),
-      ]
+  const navItems = [
+    ...NAV_TOUS,
+    ...(financeChildren.length > 0
+      ? [{ group: 'finance', label: 'Finance', icon: <IcoFinance />, children: financeChildren }]
+      : []),
+    ...(stockChildren.length > 0
+      ? [{ group: 'stock', label: 'Stock', icon: <IcoStock />, children: stockChildren }]
+      : []),
+    ...(contratChildren.length > 0
+      ? [{ group: 'contrats', label: 'Contrats', icon: <IcoContrats />, children: contratChildren }]
+      : []),
+    ...(isDir ? NAV_DIRECTION : []),
+  ]
 
   const location = useLocation()
   const isChildActive = (children) => children.some(c => location.pathname.startsWith(c.to))

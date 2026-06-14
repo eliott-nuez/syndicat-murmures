@@ -44,7 +44,7 @@ export default function ActiviteGroupe() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchMembres = async () => {
-    const { data } = await supabase.from('membres').select('id, surnom, rang').neq('rang', 'familles').order('surnom')
+    const { data } = await supabase.from('membres').select('id, surnom, rang').order('surnom')
     setMembres(data || [])
   }
 

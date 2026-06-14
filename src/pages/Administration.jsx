@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-const RANGS = ['membre', 'responsable', 'direction', 'familles']
+const RANGS = ['membre', 'responsable', 'direction']
 const RANGS_QUOTA = ['membre', 'responsable', 'direction']
 const TYPES_QUOTA = [
   { code: 'actions',  label: 'Actions effectuées', suffixe: '' },

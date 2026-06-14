@@ -18,7 +18,6 @@ import Administration from './pages/Administration'
 import FicheMembre    from './pages/FicheMembre'
 import Calendrier     from './pages/Calendrier'
 import VentesGroupe       from './pages/VentesGroupe'
-import ContratsFamilles   from './pages/ContratsFamilles'
 import ContratSuivi       from './pages/ContratSuivi'
 import ContratGestion     from './pages/ContratGestion'
 import Logs           from './pages/Logs'
@@ -46,13 +45,6 @@ export default function App() {
         <Route path="/fiche"       element={<AppLayout><FichePerso /></AppLayout>} />
         <Route path="/activite-groupe" element={<AppLayout><ActiviteGroupe /></AppLayout>} />
         <Route path="/calendrier"  element={<AppLayout><Calendrier /></AppLayout>} />
-
-        {/* Familles + Responsable + Direction */}
-        <Route path="/contrats-familles" element={
-          <AppLayout roles={['familles','responsable','direction']}>
-            <ContratsFamilles />
-          </AppLayout>
-        } />
 
         {/* Responsable + Direction */}
         <Route path="/recap-global" element={

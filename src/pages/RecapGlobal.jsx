@@ -82,7 +82,7 @@ export default function RecapGlobal() {
 
     const [commissionParams, { data: membresData }, { data: activitesData }, { data: ventesData }, { data: plantationsData }] = await Promise.all([
       chargerParamsCommission(),
-      supabase.from('membres').select('id, surnom, rang').neq('rang', 'familles').order('surnom'),
+      supabase.from('membres').select('id, surnom, rang').order('surnom'),
       supabase.from('activites').select('membre_id, somme_argent_sale, type_code')
         .gte('heure_faite', sem.debutLocal).lt('heure_faite', toLocalStr(sem.finUTC)),
       supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id')
