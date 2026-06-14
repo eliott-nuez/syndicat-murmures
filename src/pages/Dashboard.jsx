@@ -212,7 +212,7 @@ export default function Dashboard() {
                 return (
                   <div key={`${t}-${s.slot}`} className="dispo-item">
                     <div>
-                      <div className="dispo-name">{t} — emplacement n°{s.slot}</div>
+                      <div className="dispo-name">{t} — timer n°{s.slot}</div>
                     </div>
                     <div className={`dispo-time ${status.dispo ? 'dispo-ok' : 'dispo-wait'}`}>
                       {status.dispo ? '✓ Disponible' : `⏳ ${status.label}`}

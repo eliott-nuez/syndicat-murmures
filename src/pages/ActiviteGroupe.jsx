@@ -80,7 +80,7 @@ export default function ActiviteGroupe() {
     const sl     = slotsDuType(type)
     const choisi = sl.find(estDisponible)
     if (!choisi) {
-      setMsg({ type: 'error', text: `Aucun emplacement ${type} disponible pour le moment.` })
+      setMsg({ type: 'error', text: `Aucun timer ${type} disponible pour le moment.` })
       return
     }
     const autre = sl.find(s => s.id !== choisi.id)
@@ -133,7 +133,7 @@ export default function ActiviteGroupe() {
     setSaving(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
 
-    setMsg({ type: 'success', text: `${type} (emplacement n°${choisi.slot}) enregistré : ${fmt(total)} divisé entre ${participants.length} membre(s) — ${fmt(part)} chacun, ajouté à leur comptabilité.` })
+    setMsg({ type: 'success', text: `${type} (timer n°${choisi.slot}) enregistré : ${fmt(total)} divisé entre ${participants.length} membre(s) — ${fmt(part)} chacun, ajouté à leur comptabilité.` })
     setParticipants([])
     setMontantTotal('')
     fetchSlots()
@@ -169,8 +169,8 @@ export default function ActiviteGroupe() {
           Fleeca & Ammunation
         </h1>
         <p style={{ marginTop: 8, fontSize: 13, color: 'var(--texte-soft)' }}>
-          Chaque type dispose de 2 emplacements. Après un braquage, l'emplacement utilisé devient indisponible pendant <strong style={{ color: 'var(--or-pale)' }}>7 jours</strong>,
-          et l'autre emplacement (s'il était disponible) passe en battement de <strong style={{ color: 'var(--or-pale)' }}>3 heures</strong>.
+          Chaque type dispose de 2 timers. Après un braquage, le timer utilisé devient indisponible pendant <strong style={{ color: 'var(--or-pale)' }}>7 jours</strong>,
+          et l'autre timer (s'il était disponible) passe en battement de <strong style={{ color: 'var(--or-pale)' }}>3 heures</strong>.
           Le butin est partagé entre les présents et ajouté directement à leur comptabilité.
         </p>
       </div>
@@ -192,7 +192,7 @@ export default function ActiviteGroupe() {
                       background: dispo ? 'rgba(92,186,138,0.08)' : 'rgba(224,85,85,0.08)',
                       border: `1px solid ${dispo ? 'rgba(92,186,138,0.35)' : 'rgba(224,85,85,0.35)'}`,
                     }}>
-                      <span style={{ fontSize: 13, color: 'var(--texte-soft)' }}>Emplacement n°{s.slot}</span>
+                      <span style={{ fontSize: 13, color: 'var(--texte-soft)' }}>Timer n°{s.slot}</span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: dispo ? '#5cba8a' : '#e8a0a0' }}>
                         {dispo ? '✓ Disponible' : `✗ Indispo jusqu'au ${fmtDate(s.disponible_a)}`}
                       </span>
@@ -268,7 +268,7 @@ export default function ActiviteGroupe() {
 
           {!infoCourant.dispo && (
             <div className="alert alert-error" style={{ marginBottom: 16 }}>
-              ⚠ Aucun emplacement {type} disponible pour le moment.
+              ⚠ Aucun timer {type} disponible pour le moment.
             </div>
           )}
 
@@ -292,7 +292,7 @@ export default function ActiviteGroupe() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Type</th><th>Emplacement</th><th>Date</th><th>Butin total</th><th>Part / pers.</th><th>Présents</th><th>Enregistré par</th>{isDirection && <th></th>}</tr>
+                <tr><th>Type</th><th>Timer</th><th>Date</th><th>Butin total</th><th>Part / pers.</th><th>Présents</th><th>Enregistré par</th>{isDirection && <th></th>}</tr>
               </thead>
               <tbody>
                 {(showAll ? historique : historique.slice(0, 5)).map(a => (
