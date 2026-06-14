@@ -36,6 +36,7 @@ export default function ActiviteGroupe() {
   const [editingId, setEditingId]     = useState(null)
   const [editMontant, setEditMontant] = useState('')
   const [editDate, setEditDate]       = useState('')
+  const [editParticipants, setEditParticipants] = useState([])
 
   useEffect(() => {
     Promise.all([fetchMembres(), fetchSlots(), fetchHistorique()]).then(() => setLoading(false))
@@ -152,6 +153,7 @@ export default function ActiviteGroupe() {
     setEditingId(a.id)
     setEditMontant(String(a.montant_total))
     setEditDate(toInputDateTime(new Date(a.created_at)))
+    setEditParticipants((a.participants || []).map(p => p.membre_id))
     setMsg({ type: '', text: '' })
   }
 
@@ -159,29 +161,69 @@ export default function ActiviteGroupe() {
     setEditingId(null)
     setEditMontant('')
     setEditDate('')
+    setEditParticipants([])
+  }
+
+  const toggleEditParticipant = (id) => {
+    setEditParticipants(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
   const saveEdit = async (a) => {
     const total = parseFloat(editMontant)
     if (!total || total <= 0) { setMsg({ type: 'error', text: 'Montant invalide.' }); return }
     if (!editDate) { setMsg({ type: 'error', text: 'Date invalide.' }); return }
+    if (editParticipants.length === 0) { setMsg({ type: 'error', text: 'Sélectionnez au moins un participant.' }); return }
 
-    const newDate = new Date(editDate)
-    const newPart = Math.round((total / a.nb_participants) * 100) / 100
+    const newDate  = new Date(editDate)
+    const newPart  = Math.round((total / editParticipants.length) * 100) / 100
+    const heureStr = localDateStr(newDate)
+
+    const oldIds = a.activite_ids || []
+    const { data: oldRows } = oldIds.length > 0
+      ? await supabase.from('activites').select('id, membre_id').in('id', oldIds)
+      : { data: [] }
+
+    const oldMembreIds  = (oldRows || []).map(r => r.membre_id)
+    const toDeleteIds   = (oldRows || []).filter(r => !editParticipants.includes(r.membre_id)).map(r => r.id)
+    const toKeepIds     = (oldRows || []).filter(r => editParticipants.includes(r.membre_id)).map(r => r.id)
+    const toAddMembres  = editParticipants.filter(id => !oldMembreIds.includes(id))
+
+    if (toDeleteIds.length > 0) {
+      await supabase.from('activites').delete().in('id', toDeleteIds)
+    }
+    if (toKeepIds.length > 0) {
+      await supabase.from('activites').update({ somme_argent_sale: newPart, heure_faite: heureStr }).in('id', toKeepIds)
+    }
+
+    let newIds = []
+    if (toAddMembres.length > 0) {
+      const lignes = toAddMembres.map(mid => ({
+        membre_id:         mid,
+        type_code:         a.type_code,
+        heure_faite:       heureStr,
+        prochain_dispo:    localDateStr(ajouteHeures(newDate, COOLDOWN_HEURES)),
+        somme_argent_sale: newPart,
+        note:              `Activité de groupe — ${editParticipants.length} présent(s), butin ${fmt(total)}`,
+      }))
+      const { data: inserted, error: errInsert } = await supabase.from('activites').insert(lignes).select('id')
+      if (errInsert) { setMsg({ type: 'error', text: 'Erreur compta : ' + errInsert.message }); return }
+      newIds = (inserted || []).map(r => r.id)
+    }
+
+    const participantsData = editParticipants.map(pid => {
+      const m = membres.find(x => x.id === pid)
+      return { membre_id: pid, surnom: m?.surnom || '?' }
+    })
 
     const { error } = await supabase.from('activites_groupe').update({
-      montant_total: total,
-      montant_part:  newPart,
-      created_at:    newDate.toISOString(),
+      montant_total:   total,
+      montant_part:    newPart,
+      nb_participants: editParticipants.length,
+      participants:    participantsData,
+      activite_ids:    [...toKeepIds, ...newIds],
+      created_at:      newDate.toISOString(),
     }).eq('id', a.id)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
-
-    if (a.activite_ids && a.activite_ids.length > 0) {
-      await supabase.from('activites').update({
-        somme_argent_sale: newPart,
-        heure_faite:       localDateStr(newDate),
-      }).in('id', a.activite_ids)
-    }
 
     setMsg({ type: 'success', text: 'Activité de groupe mise à jour.' })
     setEditingId(null)
@@ -360,10 +402,30 @@ export default function ActiviteGroupe() {
                       ) : fmt(a.montant_total)}
                     </td>
                     <td style={{ color: 'var(--or)' }}>
-                      {editingId === a.id ? fmt((parseFloat(editMontant) || 0) / a.nb_participants) : fmt(a.montant_part)}
+                      {editingId === a.id
+                        ? fmt((parseFloat(editMontant) || 0) / (editParticipants.length || 1))
+                        : fmt(a.montant_part)}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--texte-soft)', maxWidth: 280 }}>
-                      {(a.participants || []).map(p => p.surnom).join(', ')}
+                      {editingId === a.id ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {membres.map(m => {
+                            const checked = editParticipants.includes(m.id)
+                            return (
+                              <label key={m.id} style={{
+                                display: 'flex', alignItems: 'center', gap: 4,
+                                padding: '2px 8px', borderRadius: 14, cursor: 'pointer',
+                                border: `1px solid ${checked ? 'var(--or)' : 'var(--or-border)'}`,
+                                background: checked ? 'var(--or-glow)' : 'transparent',
+                                fontSize: 11, color: checked ? 'var(--or-pale)' : 'var(--texte-soft)',
+                              }}>
+                                <input type="checkbox" checked={checked} onChange={() => toggleEditParticipant(m.id)} style={{ accentColor: 'var(--or)' }} />
+                                {m.surnom}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      ) : (a.participants || []).map(p => p.surnom).join(', ')}
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--texte-soft)' }}>{a.cree_par_surnom || '—'}</td>
                     {isDirection && (
