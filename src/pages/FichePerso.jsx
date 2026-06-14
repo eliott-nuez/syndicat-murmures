@@ -83,7 +83,7 @@ export default function FichePerso() {
     chargerQuotas(getRangEffectif() || membre.rang).then(setQuotas)
     supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBranche(data))
     if (['responsable','direction'].includes(getRangEffectif() || membre.rang)) {
-      supabase.from('membres').select('id, surnom, rang').order('surnom').then(({ data }) => setMembresListe(data || []))
+      supabase.from('membres').select('id, surnom, rang').eq('archive', false).order('surnom').then(({ data }) => setMembresListe(data || []))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -68,7 +68,7 @@ export default function FicheMembre() {
   }
 
   useEffect(() => {
-    supabase.from('membres').select('id, surnom, rang').order('surnom')
+    supabase.from('membres').select('id, surnom, rang').eq('archive', false).order('surnom')
       .then(({ data }) => setMembres(data || []))
     supabase.from('drogues').select('*').order('nom')
       .then(({ data }) => setDrogues(data || []))

@@ -41,6 +41,12 @@ export default function LoginPage() {
       return
     }
 
+    if (data.archive) {
+      await supabase.auth.signOut()
+      setError('Ce compte a été archivé.')
+      return
+    }
+
     // Marquer le membre comme connecté
     await supabase.from('membres').update({ actif: true }).eq('id', data.id)
     localStorage.setItem('sdm_membre', JSON.stringify({ ...data, actif: true }))

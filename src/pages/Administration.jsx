@@ -23,6 +23,7 @@ export default function Administration() {
   // ── Membres ────────────────────────────────────────────────────────────────
   const [membres, setMembres] = useState([])
   const [search, setSearch] = useState('')
+  const [showArchives, setShowArchives] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading]  = useState(true)
   const [saving, setSaving]    = useState(false)
@@ -202,7 +203,7 @@ export default function Administration() {
   const fetchMembres = async () => {
     setLoading(true)
     const { data } = await supabase.from('membres')
-      .select('id, surnom, nom, prenom, rang, actif, created_at, tel_legal, tel_illegal, rib, matricule, id_intranet')
+      .select('id, surnom, nom, prenom, rang, actif, archive, created_at, tel_legal, tel_illegal, rib, matricule, id_intranet')
       .order('surnom')
     setMembres(data || [])
     setLoading(false)
@@ -277,6 +278,14 @@ export default function Administration() {
 
   const handleToggleActif = async (id, actif) => {
     await supabase.from('membres').update({ actif: !actif }).eq('id', id)
+    fetchMembres()
+  }
+
+  const handleToggleArchive = async (m) => {
+    const archive = !m.archive
+    if (archive && !window.confirm(`Archiver le membre "${m.surnom}" ? Il n'apparaîtra plus dans les listes actives, mais son historique de comptabilité est conservé.`)) return
+    await supabase.from('membres').update({ archive }).eq('id', m.id)
+    setMsg({ type: 'success', text: archive ? `Membre "${m.surnom}" archivé.` : `Membre "${m.surnom}" réactivé.` })
     fetchMembres()
   }
 
@@ -406,7 +415,8 @@ export default function Administration() {
 
   // ── Recherche membres ───────────────────────────────────────────────────────
   const searchLower = search.trim().toLowerCase()
-  const membresFiltres = searchLower === '' ? membres : membres.filter(m => {
+  const membresVisibles = showArchives ? membres : membres.filter(m => !m.archive)
+  const membresFiltres = searchLower === '' ? membresVisibles : membresVisibles.filter(m => {
     const champs = [m.surnom, m.nom, m.prenom, m.rang, m.id, m.tel_legal, m.tel_illegal, m.rib, m.matricule, m.id_intranet, fmtDate(m.created_at)]
     return champs.some(c => (c || '').toString().toLowerCase().includes(searchLower))
   })
@@ -471,6 +481,10 @@ export default function Administration() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
             <input className="form-input" placeholder="🔎 Rechercher un membre (surnom, nom, prénom, rang, id, téléphone, RIB, matricule, ID intranet, date...)"
               style={{ minWidth: 360, flex: 1 }} value={search} onChange={e => setSearch(e.target.value)} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--texte-soft)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
+              <input type="checkbox" checked={showArchives} onChange={e => setShowArchives(e.target.checked)} style={{ accentColor: 'var(--or)', width: 16, height: 16 }} />
+              Afficher les membres archivés
+            </label>
             <button className="btn btn-solid" onClick={() => setShowForm(!showForm)}>
               {showForm ? '✕ Annuler' : '+ Créer un membre'}
             </button>
@@ -513,8 +527,11 @@ export default function Administration() {
                   {membresFiltres.map(m => {
                     const ed = editInfoId === m.id
                     return (
-                      <tr key={m.id}>
-                        <td style={{ fontWeight: 600 }}>{m.surnom}</td>
+                      <tr key={m.id} style={m.archive ? { opacity: 0.55 } : undefined}>
+                        <td style={{ fontWeight: 600 }}>
+                          {m.surnom}
+                          {m.archive && <span className="badge badge-gris" style={{ marginLeft: 8 }}>Archivé</span>}
+                        </td>
                         {ed ? (
                           <>
                             <td><input className="form-input" style={{ width: 100, padding: '3px 7px', fontSize: 12 }} value={editInfoForm.nom} onChange={e => setEditInfoForm(f => ({ ...f, nom: e.target.value }))} /></td>
@@ -589,6 +606,9 @@ export default function Administration() {
                             ) : (
                               <button className="btn btn-or btn-sm" onClick={() => setEditMdp(prev => ({ ...prev, [m.id]: true }))}>🔑 MDP</button>
                             )}
+                            <button className="btn btn-or btn-sm" onClick={() => handleToggleArchive(m)}>
+                              {m.archive ? '♻ Réactiver' : '📦 Archiver'}
+                            </button>
                             <button className="btn btn-danger btn-sm" disabled={deletingId === m.id} onClick={() => handleDeleteMembre(m)}>
                               {deletingId === m.id ? '...' : '🗑 Suppr.'}
                             </button>
@@ -606,6 +626,7 @@ export default function Administration() {
             <div style={{ fontSize: 11, color: 'var(--texte-soft)', marginTop: 10 }}>
               Champs affichés : Surnom · Nom · Prénom · Rang · ID unique (matricule) · ID intranet · Tél. légal · Tél. illégal · RIB · Statut · Date de création.
               Clique sur « ✎ Infos » pour modifier nom, prénom, matricule, ID intranet, téléphones et RIB ; sur le rang pour le changer ; sur « 🔑 MDP » pour forcer un nouveau mot de passe.
+              « 📦 Archiver » retire le membre des listes actives et bloque sa connexion, en conservant son historique de comptabilité — utiliser « 🗑 Suppr. » uniquement pour un compte créé par erreur.
             </div>
           </div>
         </div>

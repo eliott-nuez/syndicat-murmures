@@ -40,7 +40,7 @@ export default function Plantation() {
   const fetchData = async () => {
     setLoading(true)
     const [{ data: m }, { data: b }, { data: p }] = await Promise.all([
-      supabase.from('membres').select('id, surnom, rang').order('surnom'),
+      supabase.from('membres').select('id, surnom, rang').eq('archive', false).order('surnom'),
       supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle(),
       supabase.from('plantations')
         .select('*, membres(surnom)')
