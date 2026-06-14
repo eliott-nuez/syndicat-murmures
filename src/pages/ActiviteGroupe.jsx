@@ -243,7 +243,13 @@ export default function ActiviteGroupe() {
       await supabase.from('activites').delete().in('id', a.activite_ids)
     }
     await supabase.from('activites_groupe').delete().eq('id', a.id)
+    if (a.slot) {
+      await supabase.from('activites_groupe_slots')
+        .update({ disponible_a: null })
+        .eq('type_code', a.type_code).eq('slot', a.slot)
+    }
     setMsg({ type: 'success', text: 'Activité de groupe supprimée.' })
+    fetchSlots()
     fetchHistorique()
   }
 
