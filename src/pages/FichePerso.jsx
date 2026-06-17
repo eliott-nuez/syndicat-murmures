@@ -4,6 +4,7 @@ import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 import { getRangEffectif } from '../utils/viewAs'
 import { chargerQuotas } from '../utils/quotas'
+import { nowLocalInput, localInputToUTCISO, fmtDateTime, fmtDate as fmtDateOnly, detectTz, setUserTz, getUserTz, TZ_LIST } from '../utils/timezone'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -12,10 +13,7 @@ const COOLDOWNS_H = {
   'Cambriolage': 3,
 }
 
-function localNow() {
-  const d = new Date()
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-}
+const localNow = nowLocalInput
 
 export default function FichePerso() {
   const membre      = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
@@ -122,17 +120,9 @@ export default function FichePerso() {
     setVentes(data || [])
   }
 
-  // Retourne une chaîne datetime locale (sans conversion UTC) pour timestamp without time zone
-  const localDateStr = (d) => {
-    const pad = n => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-
   const calcProchainDispo = (heure, type) => {
     const h = COOLDOWNS_H[type] || 0
-    const d = new Date(heure)
-    d.setHours(d.getHours() + h)
-    return localDateStr(d)
+    return new Date(new Date(heure).getTime() + h * 3600 * 1000)
   }
 
   // ── Édition vente ──
@@ -203,8 +193,8 @@ export default function FichePerso() {
     setSavingAct(true)
     setMsg({ type: '', text: '' })
 
-    const heure_faite    = formAct.heure_faite  // déjà en heure locale via localNow()
-    const prochain_dispo = calcProchainDispo(new Date(heure_faite), formAct.type_code)
+    const heure_faite    = localInputToUTCISO(formAct.heure_faite)
+    const prochain_dispo = calcProchainDispo(new Date(heure_faite), formAct.type_code).toISOString()
 
     const { error } = await supabase.from('activites').insert({
       membre_id:         membre.id,
@@ -309,7 +299,7 @@ export default function FichePerso() {
       membre_id: formPlant.membre_id || membre.id,
       drogue_id: drogueActive.id,
       nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal,
-      date_plantation: formPlant.date_plantation.replace('T', ' ') + ':00',
+      date_plantation: localInputToUTCISO(formPlant.date_plantation),
       note: formPlant.note || null,
     })
     setSavingPlant(false)
@@ -362,9 +352,7 @@ export default function FichePerso() {
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
-  const parseTS = (d) => new Date(typeof d === 'string' ? d.replace(' ', 'T') : d)
-  const fmtDate = (d) =>
-    parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const fmtDate = fmtDateTime
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -413,7 +401,7 @@ export default function FichePerso() {
               <label className="form-label">Prochaine dispo (auto)</label>
               <input className="form-input" type="text" disabled
                 value={formAct.heure_faite
-                  ? fmtDate(calcProchainDispo(new Date(formAct.heure_faite), formAct.type_code))
+                  ? fmtDate(calcProchainDispo(new Date(localInputToUTCISO(formAct.heure_faite)), formAct.type_code))
                   : '—'}
                 style={{ opacity: 0.5 }} />
             </div>
@@ -771,7 +759,7 @@ export default function FichePerso() {
                           return (
                             <tr key={p.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
                               <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                                {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                                {fmtDateOnly(p.date_plantation)}
                               </td>
                               <td>
                                 <input className="form-input" type="number" min="1"
@@ -814,7 +802,7 @@ export default function FichePerso() {
                         return (
                           <tr key={p.id}>
                             <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                              {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                              {fmtDateOnly(p.date_plantation)}
                             </td>
                             <td>{p.nb_pots}</td>
                             <td style={{ fontWeight: 600 }}>{p.nb_branches}</td>
@@ -936,6 +924,9 @@ export default function FichePerso() {
         </div>
       </div>
 
+      {/* ── Fuseau horaire ── */}
+      <FuseauHoraire membreId={membre.id} />
+
       {/* ── Changer mot de passe ── */}
       <div className="card">
         <div className="card-title">Changer mon mot de passe</div>
@@ -969,6 +960,59 @@ export default function FichePerso() {
             {savingMdp ? 'Mise à jour...' : 'Changer le mot de passe'}
           </button>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function FuseauHoraire({ membreId }) {
+  const [tz, setTz] = useState(getUserTz())
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState({ type: '', text: '' })
+  const detected = detectTz()
+
+  const handleSave = async (newTz) => {
+    setSaving(true); setMsg({ type: '', text: '' })
+    try {
+      await setUserTz(membreId, newTz)
+      setTz(newTz)
+      setMsg({ type: 'success', text: 'Fuseau horaire mis à jour.' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally { setSaving(false) }
+  }
+
+  const now = new Date()
+  const apercu = now.toLocaleString('fr-FR', { timeZone: tz, dateStyle: 'short', timeStyle: 'short' })
+
+  return (
+    <div className="card">
+      <div className="card-title">Fuseau horaire</div>
+      {msg.text && (
+        <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`} style={{ marginBottom: 14 }}>
+          {msg.text}
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: 'var(--texte-soft)', marginBottom: 14 }}>
+        Toutes les heures saisies sont converties en UTC pour le stockage, puis affichées dans ton fuseau horaire.
+        Détecté automatiquement&nbsp;: <span style={{ color: 'var(--or-pale)' }}>{detected}</span>.
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div className="form-group" style={{ minWidth: 220 }}>
+          <label className="form-label">Mon fuseau horaire</label>
+          <select className="form-select" value={tz} onChange={e => handleSave(e.target.value)} disabled={saving}>
+            {!TZ_LIST.includes(tz) && <option value={tz}>{tz}</option>}
+            {TZ_LIST.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+        </div>
+        {tz !== detected && (
+          <button className="btn btn-or" disabled={saving} onClick={() => handleSave(detected)}>
+            Détecter automatiquement
+          </button>
+        )}
+        <div style={{ fontSize: 12, color: 'var(--texte-soft)' }}>
+          Heure actuelle : <strong style={{ color: 'var(--or-pale)' }}>{apercu}</strong>
+        </div>
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 import { getRangEffectif } from '../utils/viewAs'
 import { chargerQuotas } from '../utils/quotas'
+import { nowLocalInput, localInputToUTCISO, fmtDateTime, fmtDate as fmtDateOnly } from '../utils/timezone'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -12,10 +13,7 @@ const COOLDOWNS_H = {
   'Cambriolage': 3,
 }
 
-function localNow() {
-  const d = new Date()
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-}
+const localNow = nowLocalInput
 
 export default function FicheMembre() {
   const _stored  = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
@@ -117,16 +115,9 @@ export default function FicheMembre() {
     setVentes(data || [])
   }
 
-  const localDateStr = (d) => {
-    const pad = n => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  }
-
   const calcProchainDispo = (heure, type) => {
     const h = COOLDOWNS_H[type] || 0
-    const d = new Date(heure)
-    d.setHours(d.getHours() + h)
-    return localDateStr(d)
+    return new Date(new Date(heure).getTime() + h * 3600 * 1000)
   }
 
   const handleSubmitActivite = async (e) => {
@@ -134,8 +125,8 @@ export default function FicheMembre() {
     if (!membreId) return
     setSavingAct(true)
     setMsg({ type: '', text: '' })
-    const heure_faite    = formAct.heure_faite  // heure locale directe
-    const prochain_dispo = calcProchainDispo(new Date(heure_faite), formAct.type_code)
+    const heure_faite    = localInputToUTCISO(formAct.heure_faite)
+    const prochain_dispo = calcProchainDispo(new Date(heure_faite), formAct.type_code).toISOString()
     const { error } = await supabase.from('activites').insert({
       membre_id: membreId, type_code: formAct.type_code,
       heure_faite, prochain_dispo,
@@ -294,7 +285,7 @@ export default function FicheMembre() {
     const { error } = await supabase.from('plantations').insert({
       membre_id: membreId, drogue_id: drogueActive.id,
       nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal,
-      date_plantation: formPlant.date_plantation.replace('T', ' ') + ':00',
+      date_plantation: localInputToUTCISO(formPlant.date_plantation),
       note: formPlant.note || null,
     })
     setSavingPlant(false)
@@ -358,9 +349,7 @@ export default function FicheMembre() {
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
-  const parseTS = (d) => new Date(typeof d === 'string' ? d.replace(' ', 'T') : d)
-  const fmtDate = (d) =>
-    parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const fmtDate = fmtDateTime
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -442,7 +431,7 @@ export default function FicheMembre() {
                   <label className="form-label">Prochaine dispo (auto)</label>
                   <input className="form-input" type="text" disabled style={{ opacity: 0.5 }}
                     value={formAct.heure_faite
-                      ? fmtDate(calcProchainDispo(new Date(formAct.heure_faite), formAct.type_code))
+                      ? fmtDate(calcProchainDispo(new Date(localInputToUTCISO(formAct.heure_faite)), formAct.type_code))
                       : '—'} />
                 </div>
               </div>
@@ -767,7 +756,7 @@ export default function FicheMembre() {
                             if (isEditing) return (
                               <tr key={p.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
                                 <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                                  {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                                  {fmtDateOnly(p.date_plantation)}
                                 </td>
                                 <td>
                                   <input className="form-input" type="number" min="1"
@@ -807,7 +796,7 @@ export default function FicheMembre() {
                             return (
                               <tr key={p.id}>
                                 <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                                  {new Date(p.date_plantation).toLocaleDateString('fr-FR')}
+                                  {fmtDateOnly(p.date_plantation)}
                                 </td>
                                 <td>{p.nb_pots}</td>
                                 <td>{p.nb_branches}</td>

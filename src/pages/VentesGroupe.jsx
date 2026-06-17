@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { nowLocalInput, localInputToUTCISO, fmtDateTime } from '../utils/timezone'
 
-function localNow() {
-  const d = new Date()
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-}
-
-const parseTS = (d) => new Date(typeof d === 'string' ? d.replace(' ', 'T') : d)
-const fmtDate = (d) =>
-  parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const localNow = nowLocalInput
+const fmtDate = fmtDateTime
 
 const fmt = (v) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -70,8 +65,7 @@ export default function VentesGroupe() {
     setMsg({ type: '', text: '' })
 
     const benefice = beneficeCalc ?? 0
-    // created_at en heure locale naïve pour timestamp without time zone
-    const created_at = form.created_at.replace('T', ' ') + ':00'
+    const created_at = localInputToUTCISO(form.created_at)
 
     const { error } = await supabase.from('ventes_groupe').insert({
       membre_id:           membre.id,

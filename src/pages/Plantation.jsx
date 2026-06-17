@@ -1,18 +1,13 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaineStr } from '../utils/temps'
+import { nowLocalInput, localInputToUTCISO, fmtDateTime } from '../utils/timezone'
 
 // Prix de vente par branche en argent sale
 const PRIX_VENTE_BRANCHE = 70
 
-function localNow() {
-  const d = new Date()
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-}
-
-const parseTS = (d) => new Date(typeof d === 'string' ? d.replace(' ', 'T') : d)
-const fmtDate = (d) =>
-  parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const localNow = nowLocalInput
+const fmtDate = fmtDateTime
 
 const fmt = (v) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -92,7 +87,7 @@ export default function Plantation() {
       nb_branches,
       branches_par_pot: branches_par_pot ?? 0,
       benefice:         beneficeFinal,
-      date_plantation:  form.date_plantation.replace('T', ' ') + ':00',
+      date_plantation:  localInputToUTCISO(form.date_plantation),
       note:             form.note || null,
     })
 

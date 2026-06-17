@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import { detectTz } from '../utils/timezone'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -47,9 +48,15 @@ export default function LoginPage() {
       return
     }
 
-    // Marquer le membre comme connecté
-    await supabase.from('membres').update({ actif: true }).eq('id', data.id)
-    localStorage.setItem('sdm_membre', JSON.stringify({ ...data, actif: true }))
+    // Marquer le membre comme connecté + détecter sa TZ si pas encore définie
+    const updates = { actif: true }
+    let timezone = data.timezone
+    if (!timezone) {
+      timezone = detectTz()
+      updates.timezone = timezone
+    }
+    await supabase.from('membres').update(updates).eq('id', data.id)
+    localStorage.setItem('sdm_membre', JSON.stringify({ ...data, ...updates }))
     navigate('/dashboard')
   }
 

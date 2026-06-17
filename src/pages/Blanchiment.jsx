@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { fmtDateTime } from '../utils/timezone'
 
 export default function Blanchiment() {
   const [blanchisseurs, setBlanchisseurs] = useState([])
@@ -91,8 +92,7 @@ export default function Blanchiment() {
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
-  const fmtDate = (d) =>
-    new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const fmtDate = fmtDateTime
 
   const selectedBlanch = blanchisseurs.find(b => b.id === formOp.blanchisseur_id)
   const previewNet = selectedBlanch && formOp.montant_sale_envoye

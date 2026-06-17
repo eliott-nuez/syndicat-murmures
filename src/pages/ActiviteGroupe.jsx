@@ -1,21 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { fmtDateTime, dateToLocalInput, localInputToUTCISO } from '../utils/timezone'
 
 const TYPES = ['Fleeca', 'Ammunation']
 const COOLDOWN_HEURES = 7 * 24  // emplacement utilisé : indisponible 7 jours
 
-function localDateStr(d) {
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
 function ajouteHeures(date, heures) {
   return new Date(date.getTime() + heures * 3600 * 1000)
-}
-
-function toInputDateTime(d) {
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export default function ActiviteGroupe() {
@@ -62,10 +53,8 @@ export default function ActiviteGroupe() {
 
   const fmt = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
-  const fmtDate = (d) =>
-    new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-  const fmtDateLong = (d) =>
-    new Date(d).toLocaleString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const fmtDate = fmtDateTime
+  const fmtDateLong = fmtDateTime
 
   // ── Emplacements / disponibilité par type ──
   const slotsDuType = (t) => slots.filter(s => s.type_code === t).sort((a, b) => a.slot - b.slot)
@@ -102,8 +91,8 @@ export default function ActiviteGroupe() {
 
     const now       = new Date()
     const dispoMaj  = ajouteHeures(now, COOLDOWN_HEURES)
-    const dispoStr  = localDateStr(dispoMaj)
-    const heureStr  = localDateStr(now)
+    const dispoStr  = dispoMaj.toISOString()
+    const heureStr  = now.toISOString()
 
     // 1. Insère les lignes de comptabilité (table activites) pour chaque présent
     const lignesActs = participantsData.map(p => ({
@@ -147,7 +136,7 @@ export default function ActiviteGroupe() {
   const startEdit = (a) => {
     setEditingId(a.id)
     setEditMontant(String(a.montant_total))
-    setEditDate(toInputDateTime(new Date(a.created_at)))
+    setEditDate(dateToLocalInput(new Date(a.created_at)))
     setEditParticipants((a.participants || []).map(p => p.membre_id))
     setEditCommentaire(a.commentaire || '')
     setMsg({ type: '', text: '' })
@@ -171,9 +160,10 @@ export default function ActiviteGroupe() {
     if (!editDate) { setMsg({ type: 'error', text: 'Date invalide.' }); return }
     if (editParticipants.length === 0) { setMsg({ type: 'error', text: 'Sélectionnez au moins un participant.' }); return }
 
-    const newDate  = new Date(editDate)
+    const newDateISO = localInputToUTCISO(editDate)
+    const newDate  = new Date(newDateISO)
     const newPart  = Math.round((total / editParticipants.length) * 100) / 100
-    const heureStr = localDateStr(newDate)
+    const heureStr = newDateISO
 
     const oldIds = a.activite_ids || []
     const { data: oldRows } = oldIds.length > 0
@@ -198,7 +188,7 @@ export default function ActiviteGroupe() {
         membre_id:         mid,
         type_code:         a.type_code,
         heure_faite:       heureStr,
-        prochain_dispo:    localDateStr(ajouteHeures(newDate, COOLDOWN_HEURES)),
+        prochain_dispo:    ajouteHeures(newDate, COOLDOWN_HEURES).toISOString(),
         somme_argent_sale: newPart,
         note:              `Activité de groupe — ${editParticipants.length} présent(s), butin ${fmt(total)}`,
       }))

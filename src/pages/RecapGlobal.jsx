@@ -1,50 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function debutSemaineDate(date) {
-  const d = new Date(date)
-  const dow = d.getDay() || 7
-  d.setDate(d.getDate() - (dow - 1))
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function toLocalStr(d) {
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
-function genererSemaines() {
-  const now   = new Date()
-  const lundi = debutSemaineDate(now)
-  const semaines = []
-
-  for (let i = 0; i < 13; i++) {
-    const debut = new Date(lundi)
-    debut.setDate(debut.getDate() - i * 7)
-    const fin = new Date(debut)
-    fin.setDate(fin.getDate() + 7)
-
-    const num  = getWeekNumber(debut)
-    const fmtD = (d) => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
-    const label = i === 0
-      ? `Semaine en cours (S${num} — ${fmtD(debut)} au ${fmtD(new Date(fin.getTime() - 1))})`
-      : `S${num} — ${fmtD(debut)} au ${fmtD(new Date(fin.getTime() - 1))}`
-
-    semaines.push({ label, debutLocal: toLocalStr(debut), debutUTC: debut, finUTC: fin })
-  }
-  return semaines
-}
-
-function getWeekNumber(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7))
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
-  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7)
-}
+import { genererSemaines } from '../utils/temps'
+import { fmtDateTime } from '../utils/timezone'
 
 const fmt = (v) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
@@ -84,11 +42,11 @@ export default function RecapGlobal() {
       chargerParamsCommission(),
       supabase.from('membres').select('id, surnom, rang').order('surnom'),
       supabase.from('activites').select('membre_id, somme_argent_sale, type_code')
-        .gte('heure_faite', sem.debutLocal).lt('heure_faite', toLocalStr(sem.finUTC)),
+        .gte('heure_faite', sem.debutUTC.toISOString()).lt('heure_faite', sem.finUTC.toISOString()),
       supabase.from('ventes_drogue').select('membre_id, argent_sale, prix_total, statut, quantite, drogue_id')
         .gte('created_at', sem.debutUTC.toISOString()).lt('created_at', sem.finUTC.toISOString()),
       supabase.from('plantations').select('membre_id, benefice, nb_branches')
-        .gte('date_plantation', sem.debutLocal).lt('date_plantation', toLocalStr(sem.finUTC)),
+        .gte('date_plantation', sem.debutUTC.toISOString()).lt('date_plantation', sem.finUTC.toISOString()),
     ])
 
     const result = (membresData || []).map(m => {
@@ -136,8 +94,8 @@ export default function RecapGlobal() {
     const { data: histPlants } = await supabase
       .from('plantations')
       .select('*, membres(surnom)')
-      .gte('date_plantation', sem.debutLocal)
-      .lt('date_plantation', toLocalStr(sem.finUTC))
+      .gte('date_plantation', sem.debutUTC.toISOString())
+      .lt('date_plantation', sem.finUTC.toISOString())
       .order('date_plantation', { ascending: false })
     setHistoriquePlants(histPlants || [])
 
@@ -338,9 +296,7 @@ export default function RecapGlobal() {
                     {historiquePlants.map(p => (
                       <tr key={p.id}>
                         <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                          {new Date(p.date_plantation).toLocaleString('fr-FR', {
-                            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-                          })}
+                          {fmtDateTime(p.date_plantation)}
                         </td>
                         <td style={{ fontWeight: 500 }}>{p.membres?.surnom || '—'}</td>
                         <td style={{ textAlign: 'center' }}>{(p.nb_pots || 0).toLocaleString('fr-FR')}</td>

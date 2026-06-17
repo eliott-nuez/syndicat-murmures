@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { fmtDate as fmtDateOnly } from '../utils/timezone'
 
 const RANGS = ['membre', 'responsable', 'direction']
 const RANGS_QUOTA = ['membre', 'responsable', 'direction']
@@ -410,7 +411,7 @@ export default function Administration() {
     fetchCommission()
   }
 
-  const fmtDate = (d) => new Date(d).toLocaleDateString('fr-FR')
+  const fmtDate = fmtDateOnly
   const fmt = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
   // ── Recherche membres ───────────────────────────────────────────────────────

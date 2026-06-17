@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { fmtDateTime } from '../utils/timezone'
 
 const OP_LABELS = {
   ajouter:  'Ajouter',
@@ -494,7 +495,7 @@ export default function Stock() {
                   <td>{cs.drogues?.nom || '—'}</td>
                   <td style={{ color: cs.quantite <= 0 ? '#e05555' : 'var(--texte)' }}>{cs.quantite}</td>
                   <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                    {new Date(cs.updated_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {fmtDateTime(cs.updated_at)}
                   </td>
                 </tr>
               ))}
@@ -547,7 +548,7 @@ export default function Stock() {
                   <td>{cs.consommables?.nom || '—'}</td>
                   <td style={{ color: cs.quantite <= 0 ? '#e05555' : 'var(--texte)' }}>{cs.quantite}</td>
                   <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>
-                    {new Date(cs.updated_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {fmtDateTime(cs.updated_at)}
                   </td>
                 </tr>
               ))}

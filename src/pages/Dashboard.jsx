@@ -4,6 +4,7 @@ import { getDebutSemaine, getDebutSemaineStr } from '../utils/temps'
 import { chargerParamsCommission, calculerCommission } from '../utils/commission'
 import { chargerQuotas } from '../utils/quotas'
 import { getRangEffectif } from '../utils/viewAs'
+import { fmtDateTime } from '../utils/timezone'
 import ContratsSuiviTable from '../components/ContratsSuiviTable'
 
 // Types d'activites avec leurs cooldowns (en heures)
@@ -23,16 +24,10 @@ const LABELS = {
   'Cambriolage': 'Cambriolage',
 }
 
-// Normalise les timestamps Supabase "YYYY-MM-DD HH:MM:SS" → "YYYY-MM-DDTHH:MM:SS" (heure locale)
-function parseTS(str) {
-  if (!str) return null
-  return new Date(typeof str === 'string' ? str.replace(' ', 'T') : str)
-}
-
 // Retourne { dispo: true } ou { dispo: false, label: "2h 34m" }
 function getDispoStatus(prochainDispo) {
   if (!prochainDispo) return { dispo: true, jamaisFait: true }
-  const diff = parseTS(prochainDispo) - new Date()
+  const diff = new Date(prochainDispo) - new Date()
   if (diff <= 0) return { dispo: true }
   const h = Math.floor(diff / 3600000)
   const m = Math.floor((diff % 3600000) / 60000)
@@ -137,8 +132,7 @@ export default function Dashboard() {
   const formatMontant = (v) =>
     new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
 
-  const fmtDate = (d) =>
-    parseTS(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const fmtDate = fmtDateTime
 
   if (loading) return (
     <div className="loading-screen">
@@ -549,8 +543,8 @@ function ZonesTaxes({ isDirection }) {
             const exp    = new Date(zone.date_expiration)
             const diff   = exp - new Date()
             const label  = diff > 0
-              ? `Expire dans ${fmtDelta(diff)} — ${exp.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
-              : `Expiré depuis ${fmtDelta(-diff)} — ${exp.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+              ? `Expire dans ${fmtDelta(diff)} — ${fmtDateTime(zone.date_expiration)}`
+              : `Expiré depuis ${fmtDelta(-diff)} — ${fmtDateTime(zone.date_expiration)}`
 
             return (
               <div key={zone.id} style={{
