@@ -5,6 +5,7 @@ import { chargerParamsCommission, calculerCommission } from '../utils/commission
 import { getRangEffectif } from '../utils/viewAs'
 import { chargerQuotas } from '../utils/quotas'
 import { nowLocalInput, localInputToUTCISO, fmtDateTime, fmtDate as fmtDateOnly, detectTz, setUserTz, getUserTz, TZ_LIST } from '../utils/timezone'
+import { chargerBrancheParams, calculerBenefice, recalculerBeneficesSemaine, toSale } from '../utils/branche'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -19,8 +20,7 @@ export default function FichePerso() {
   const membre      = JSON.parse(localStorage.getItem('sdm_membre') || '{}')
   const rangEffectif = getRangEffectif() || membre.rang || 'membre'
 
-  const PRIX_VENTE_BRANCHE = 70
-
+  const [brancheParams, setBrancheParams] = useState(null)
   const [drogues, setDrogues]               = useState([])
   const [activites, setActivites]           = useState([])
   const [ventes, setVentes]                 = useState([])
@@ -80,6 +80,7 @@ export default function FichePerso() {
     chargerParamsCommission().then(setCommissionParams)
     chargerQuotas(getRangEffectif() || membre.rang).then(setQuotas)
     supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBranche(data))
+    chargerBrancheParams().then(setBrancheParams)
     if (['responsable','direction'].includes(getRangEffectif() || membre.rang)) {
       supabase.from('membres').select('id, surnom, rang').eq('archive', false).order('surnom').then(({ data }) => setMembresListe(data || []))
     }
@@ -158,11 +159,11 @@ export default function FichePerso() {
     const nb_branches = parseInt(editPlantForm.nb_branches) || 0
     if (!nb_pots || !nb_branches) { setMsg({ type: 'error', text: 'Pots et branches obligatoires.' }); return }
     const branches_par_pot = Math.round(nb_branches / nb_pots)
-    const beneficeFinal    = branche ? nb_branches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : 0
     setSavingEditPlant(true)
     const { error } = await supabase.from('plantations')
-      .update({ nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal, note: editPlantForm.note || null })
+      .update({ nb_pots, nb_branches, branches_par_pot, benefice: 0, note: editPlantForm.note || null })
       .eq('id', editPlantId)
+    if (!error && branche) await recalculerBeneficesSemaine(branche.id, brancheParams)
     setSavingEditPlant(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
     setMsg({ type: 'success', text: 'Récolte mise à jour.' })
@@ -293,15 +294,15 @@ export default function FichePerso() {
       drogueActive = data; if (drogueActive) setBranche(drogueActive)
     }
     if (!drogueActive) { setMsg({ type: 'error', text: 'Drogue "Branche" introuvable.' }); setSavingPlant(false); return }
-    const beneficeFinal = nb_branches * (PRIX_VENTE_BRANCHE - drogueActive.prix_revient)
     const branches_par_pot = nb_pots > 0 ? Math.round(nb_branches / nb_pots) : 0
     const { error } = await supabase.from('plantations').insert({
       membre_id: formPlant.membre_id || membre.id,
       drogue_id: drogueActive.id,
-      nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal,
+      nb_pots, nb_branches, branches_par_pot, benefice: 0,
       date_plantation: localInputToUTCISO(formPlant.date_plantation),
       note: formPlant.note || null,
     })
+    if (!error) await recalculerBeneficesSemaine(drogueActive.id, brancheParams)
     setSavingPlant(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }) }
     else {
@@ -670,14 +671,20 @@ export default function FichePerso() {
         const plantNbPots     = parseInt(formPlant.nb_pots) || 0
         const plantNbBranches = parseInt(formPlant.nb_branches) || 0
         const plantBpP        = plantNbPots > 0 && plantNbBranches > 0 ? Math.round(plantNbBranches / plantNbPots) : null
-        const plantBenefice   = branche && plantNbBranches > 0 ? plantNbBranches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : null
+        const totalPotsSemaineAvecCelui = plantations.reduce((s, p) => s + (p.nb_pots || 0), 0) + plantNbPots
+        const plantBenefice   = brancheParams && plantNbBranches > 0 && plantNbPots > 0
+          ? calculerBenefice(plantNbPots, plantNbBranches, brancheParams, totalPotsSemaineAvecCelui)
+          : null
+        const prixReventeSale = brancheParams
+          ? toSale(brancheParams.branche_prix_revente_branche.valeur, brancheParams.branche_prix_revente_branche.monnaie)
+          : 0
         return (
           <div className="card">
             <div className="card-title">Récolte de cannabis</div>
-            {branche && (
+            {brancheParams && (
               <div style={{ fontSize: 12, color: 'var(--texte-soft)', marginBottom: 14 }}>
-                Branche : coût revient <span style={{ color: 'var(--or-pale)' }}>{fmt(branche.prix_revient)}/u</span>
-                {' · '}prix vente <span style={{ color: 'var(--or-pale)' }}>{PRIX_VENTE_BRANCHE}$/u</span>
+                Prix revente : <span style={{ color: 'var(--or-pale)' }}>{fmt(prixReventeSale)}/branche</span>
+                {' · '}coûts configurables par la direction (onglet Branches)
               </div>
             )}
             <form onSubmit={handleSubmitPlantation}>
@@ -755,7 +762,10 @@ export default function FichePerso() {
                           const epots = parseInt(editPlantForm.nb_pots) || 0
                           const ebranches = parseInt(editPlantForm.nb_branches) || 0
                           const emoy = epots > 0 && ebranches > 0 ? Math.round(ebranches / epots) : null
-                          const ebenef = branche && ebranches > 0 ? ebranches * (PRIX_VENTE_BRANCHE - branche.prix_revient) : null
+                          const eTotalPots = plantations.reduce((s, x) => s + (x.id === editPlantId ? epots : (x.nb_pots || 0)), 0)
+                          const ebenef = brancheParams && ebranches > 0 && epots > 0
+                            ? calculerBenefice(epots, ebranches, brancheParams, eTotalPots)
+                            : null
                           return (
                             <tr key={p.id} style={{ background: 'rgba(201,168,76,0.04)' }}>
                               <td style={{ color: 'var(--texte-soft)', fontSize: 12 }}>

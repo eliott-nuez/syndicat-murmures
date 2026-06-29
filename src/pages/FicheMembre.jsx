@@ -5,6 +5,7 @@ import { chargerParamsCommission, calculerCommission } from '../utils/commission
 import { getRangEffectif } from '../utils/viewAs'
 import { chargerQuotas } from '../utils/quotas'
 import { nowLocalInput, localInputToUTCISO, fmtDateTime, fmtDate as fmtDateOnly } from '../utils/timezone'
+import { chargerBrancheParams, calculerBenefice, recalculerBeneficesSemaine } from '../utils/branche'
 
 const COOLDOWNS_H = {
   'ATM':         3,
@@ -31,7 +32,7 @@ export default function FicheMembre() {
   const [quotas, setQuotas] = useState({ actions: 20, branches: 2000, unites: 300 })
   const [msg, setMsg]                       = useState({ type: '', text: '' })
 
-  const PRIX_VENTE_BRANCHE_FM = 70
+  const [brancheParams, setBrancheParams] = useState(null)
   const [brancheDrogue, setBrancheDrogue] = useState(null)
   const [formPlant, setFormPlant]         = useState({ nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' })
   const [savingPlant, setSavingPlant]     = useState(false)
@@ -72,6 +73,7 @@ export default function FicheMembre() {
       .then(({ data }) => setDrogues(data || []))
     chargerParamsCommission().then(setCommissionParams)
     supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle().then(({ data }) => setBrancheDrogue(data))
+    chargerBrancheParams().then(setBrancheParams)
   }, [])
 
   useEffect(() => {
@@ -248,11 +250,11 @@ export default function FicheMembre() {
     }
     if (!drogueActive) { setMsg({ type: 'error', text: 'Drogue "Branche" introuvable.' }); return }
     const branches_par_pot = nb_pots > 0 ? Math.round(nb_branches / nb_pots) : 0
-    const benefice = nb_branches * (PRIX_VENTE_BRANCHE_FM - drogueActive.prix_revient)
     setSavingEditPlant(true)
     const { error } = await supabase.from('plantations')
-      .update({ nb_pots, nb_branches, branches_par_pot, benefice, note: editPlantForm.note || null })
+      .update({ nb_pots, nb_branches, branches_par_pot, benefice: 0, note: editPlantForm.note || null })
       .eq('id', editPlantId)
+    if (!error && drogueActive) await recalculerBeneficesSemaine(drogueActive.id, brancheParams)
     setSavingEditPlant(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
     setMsg({ type: 'success', text: 'Plantation mise à jour.' })
@@ -263,8 +265,10 @@ export default function FicheMembre() {
   const handleDeletePlantation = async (id) => {
     if (!window.confirm('Supprimer cette plantation ?')) return
     const { error } = await supabase.from('plantations').delete().eq('id', id)
-    if (error) setMsg({ type: 'error', text: 'Erreur : ' + error.message })
-    else { setMsg({ type: 'success', text: 'Plantation supprimée.' }); fetchPlantations() }
+    if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }); return }
+    if (brancheDrogue) await recalculerBeneficesSemaine(brancheDrogue.id, brancheParams)
+    setMsg({ type: 'success', text: 'Plantation supprimée.' })
+    fetchPlantations()
   }
 
   const handleSubmitPlantation = async (e) => {
@@ -280,14 +284,14 @@ export default function FicheMembre() {
       drogueActive = data; if (drogueActive) setBrancheDrogue(drogueActive)
     }
     if (!drogueActive) { setMsg({ type: 'error', text: 'Drogue "Branche" introuvable.' }); setSavingPlant(false); return }
-    const beneficeFinal    = nb_branches * (PRIX_VENTE_BRANCHE_FM - drogueActive.prix_revient)
     const branches_par_pot = nb_pots > 0 ? Math.round(nb_branches / nb_pots) : 0
     const { error } = await supabase.from('plantations').insert({
       membre_id: membreId, drogue_id: drogueActive.id,
-      nb_pots, nb_branches, branches_par_pot, benefice: beneficeFinal,
+      nb_pots, nb_branches, branches_par_pot, benefice: 0,
       date_plantation: localInputToUTCISO(formPlant.date_plantation),
       note: formPlant.note || null,
     })
+    if (!error) await recalculerBeneficesSemaine(drogueActive.id, brancheParams)
     setSavingPlant(false)
     if (error) { setMsg({ type: 'error', text: 'Erreur : ' + error.message }) }
     else {
@@ -687,7 +691,10 @@ export default function FicheMembre() {
             const fmNbPots     = parseInt(formPlant.nb_pots) || 0
             const fmNbBranches = parseInt(formPlant.nb_branches) || 0
             const fmBpP        = fmNbPots > 0 && fmNbBranches > 0 ? Math.round(fmNbBranches / fmNbPots) : null
-            const fmBenef      = brancheDrogue && fmNbBranches > 0 ? fmNbBranches * (PRIX_VENTE_BRANCHE_FM - brancheDrogue.prix_revient) : null
+            const fmTotalPotsSem = plantations.reduce((s, p) => s + (p.nb_pots || 0), 0) + fmNbPots
+            const fmBenef      = brancheParams && fmNbBranches > 0 && fmNbPots > 0
+              ? calculerBenefice(fmNbPots, fmNbBranches, brancheParams, fmTotalPotsSem)
+              : null
             return (
               <div className="card">
                 <div className="card-title">Récoltes cette semaine — {membre.surnom}</div>

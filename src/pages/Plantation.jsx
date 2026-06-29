@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { getDebutSemaineStr } from '../utils/temps'
 import { nowLocalInput, localInputToUTCISO, fmtDateTime } from '../utils/timezone'
-
-// Prix de vente par branche en argent sale
-const PRIX_VENTE_BRANCHE = 70
+import { chargerBrancheParams, calculerBenefice, recalculerBeneficesSemaine } from '../utils/branche'
 
 const localNow = nowLocalInput
 const fmtDate = fmtDateTime
@@ -21,6 +19,7 @@ export default function Plantation() {
   const [loading, setLoading]         = useState(true)
   const [saving, setSaving]           = useState(false)
   const [msg, setMsg]                 = useState({ type: '', text: '' })
+  const [brancheParams, setBrancheParams] = useState(null)
 
   const [form, setForm] = useState({
     membre_id:       membreCourant.id || '',
@@ -34,17 +33,19 @@ export default function Plantation() {
 
   const fetchData = async () => {
     setLoading(true)
-    const [{ data: m }, { data: b }, { data: p }] = await Promise.all([
+    const [{ data: m }, { data: b }, { data: p }, bp] = await Promise.all([
       supabase.from('membres').select('id, surnom, rang').eq('archive', false).order('surnom'),
       supabase.from('drogues').select('*').ilike('nom', '%branche%').maybeSingle(),
       supabase.from('plantations')
         .select('*, membres(surnom)')
         .gte('date_plantation', getDebutSemaineStr())
         .order('date_plantation', { ascending: false }),
+      chargerBrancheParams(),
     ])
     setMembres(m || [])
     setBranche(b || null)
     setPlantations(p || [])
+    setBrancheParams(bp)
     setLoading(false)
   }
 
@@ -52,8 +53,9 @@ export default function Plantation() {
   const nb_pots          = parseInt(form.nb_pots)     || 0
   const nb_branches      = parseInt(form.nb_branches) || 0
   const branches_par_pot = nb_pots > 0 && nb_branches > 0 ? Math.round(nb_branches / nb_pots) : null
-  const beneficeCalc     = branche && nb_branches > 0
-    ? nb_branches * (PRIX_VENTE_BRANCHE - branche.prix_revient)
+  const totalPotsSemaineAvec = plantations.reduce((s, p) => s + (p.nb_pots || 0), 0) + nb_pots
+  const beneficeCalc     = brancheParams && nb_branches > 0 && nb_pots > 0
+    ? calculerBenefice(nb_pots, nb_branches, brancheParams, totalPotsSemaineAvec)
     : null
 
   const handleSubmit = async (e) => {
@@ -78,28 +80,30 @@ export default function Plantation() {
       return
     }
 
-    const beneficeFinal = nb_branches * (PRIX_VENTE_BRANCHE - drogueActive.prix_revient)
-
+    // Le bénéfice est recalculé pour toute la semaine après insertion.
     const { error } = await supabase.from('plantations').insert({
       membre_id:        form.membre_id,
       drogue_id:        drogueActive.id,
       nb_pots,
       nb_branches,
       branches_par_pot: branches_par_pot ?? 0,
-      benefice:         beneficeFinal,
+      benefice:         0,
       date_plantation:  localInputToUTCISO(form.date_plantation),
       note:             form.note || null,
     })
 
-    setSaving(false)
     if (error) {
+      setSaving(false)
       setMsg({ type: 'error', text: 'Erreur : ' + error.message })
-    } else {
-      const nom = membres.find(m => m.id === form.membre_id)?.surnom || '—'
-      setMsg({ type: 'success', text: `Récolte enregistrée pour ${nom}.` })
-      setForm(f => ({ ...f, nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' }))
-      fetchData()
+      return
     }
+
+    await recalculerBeneficesSemaine(drogueActive.id, brancheParams)
+    setSaving(false)
+    const nom = membres.find(m => m.id === form.membre_id)?.surnom || '—'
+    setMsg({ type: 'success', text: `Récolte enregistrée pour ${nom}.` })
+    setForm(f => ({ ...f, nb_pots: '', nb_branches: '', date_plantation: localNow(), note: '' }))
+    fetchData()
   }
 
   // Totaux historique

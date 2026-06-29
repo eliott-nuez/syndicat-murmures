@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { fmtDate as fmtDateOnly } from '../utils/timezone'
+import { chargerBrancheParams, setBrancheParam, recalculerBeneficesSemaine, calculerBenefice, toSale, toPropre, KEYS_LABELS } from '../utils/branche'
+import { getDebutSemaineStr } from '../utils/temps'
 
 const RANGS = ['membre', 'responsable', 'direction']
 const RANGS_QUOTA = ['membre', 'responsable', 'direction']
@@ -15,6 +17,7 @@ const TABS = [
   { key: 'membres',        label: 'Membres',        icon: '👥' },
   { key: 'quotas',         label: 'Quotas',         icon: '🎯' },
   { key: 'commission',     label: 'Commission',     icon: '💰' },
+  { key: 'branches',       label: 'Branches',       icon: '🌿' },
   { key: 'avertissements', label: 'Avertissements', icon: '⚠️' },
 ]
 
@@ -914,6 +917,9 @@ export default function Administration() {
         </div>
       )}
 
+      {/* ══════════════════════════ ONGLET BRANCHES ══════════════════════════ */}
+      {activeTab === 'branches' && <BrancheTab />}
+
       {/* ══════════════════════════ ONGLET AVERTISSEMENTS ══════════════════════════ */}
       {activeTab === 'avertissements' && (
         <div className="card">
@@ -990,6 +996,194 @@ export default function Administration() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// ONGLET BRANCHES — paramètres de coût de production + simulateur
+// ════════════════════════════════════════════════════════════════════════
+function BrancheTab() {
+  const KEYS_ORDER = [
+    'branche_prix_revente_branche',
+    'branche_prix_pot',
+    'branche_prix_graine',
+    'branche_prix_bouteille',
+    'branche_prix_fertilisant_semaine',
+  ]
+
+  const [params, setParams] = useState(null)
+  const [edits, setEdits]   = useState({})
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg]       = useState({ type: '', text: '' })
+  const [totalPotsSem, setTotalPotsSem] = useState(0)
+  const [brancheId, setBrancheId]       = useState(null)
+  const [sim, setSim] = useState({ nb_pots: '8', nb_branches: '64', total_pots_semaine: '' })
+
+  useEffect(() => { (async () => {
+    const p = await chargerBrancheParams()
+    setParams(p)
+    const obj = {}
+    Object.entries(p).forEach(([k, v]) => { obj[k] = { valeur: String(v.valeur), monnaie: v.monnaie } })
+    setEdits(obj)
+    // total pots de la semaine courante (branche)
+    const { data: brancheData } = await supabase.from('drogues')
+      .select('id').ilike('nom', '%branche%').maybeSingle()
+    const bid = brancheData?.id
+    setBrancheId(bid)
+    if (bid) {
+      const { data } = await supabase.from('plantations')
+        .select('nb_pots').eq('drogue_id', bid).gte('date_plantation', getDebutSemaineStr())
+      const total = (data || []).reduce((s, p) => s + (p.nb_pots || 0), 0)
+      setTotalPotsSem(total)
+      setSim(s => ({ ...s, total_pots_semaine: String(total) }))
+    }
+  })() }, [])
+
+  const fmtMt = (v) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(v)
+  const fmtSale = (v) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(v)
+
+  const handleChange = (cle, field, val) => {
+    setEdits(prev => ({ ...prev, [cle]: { ...prev[cle], [field]: val } }))
+  }
+
+  const handleSave = async () => {
+    setSaving(true); setMsg({ type: '', text: '' })
+    try {
+      for (const cle of KEYS_ORDER) {
+        const e = edits[cle]
+        await setBrancheParam(cle, parseFloat(e.valeur) || 0, e.monnaie)
+      }
+      const p = await chargerBrancheParams()
+      setParams(p)
+      // Recalcule tous les bénéfices de la semaine
+      if (brancheId) await recalculerBeneficesSemaine(brancheId, p)
+      setMsg({ type: 'success', text: 'Paramètres mis à jour. Bénéfices de la semaine recalculés.' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally { setSaving(false) }
+  }
+
+  if (!params) return <div className="loading-screen"><div className="spinner" /></div>
+
+  // Simulateur
+  const sim_pots = parseInt(sim.nb_pots) || 0
+  const sim_branches = parseInt(sim.nb_branches) || 0
+  const sim_total = Math.max(parseInt(sim.total_pots_semaine) || 0, sim_pots)
+  const sim_profit = calculerBenefice(sim_pots, sim_branches, params, sim_total)
+  const sim_par_branche = sim_branches > 0 ? sim_profit / sim_branches : 0
+  const sim_par_pot     = sim_pots > 0    ? sim_profit / sim_pots     : 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+      {/* Paramètres */}
+      <div className="card">
+        <div className="card-title">Coûts de production & prix de revente</div>
+        {msg.text && <div className={`alert alert-${msg.type === 'error' ? 'error' : 'success'}`} style={{ marginBottom: 14 }}>{msg.text}</div>}
+        <div style={{ fontSize: 12, color: 'var(--texte-soft)', marginBottom: 16 }}>
+          Pour chaque ligne, choisis la monnaie de saisie (propre ou sale). Le calcul du bénéfice se fait
+          toujours en sale. Conversion automatique : <strong>1$ propre = 1,35$ sale</strong>.
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Paramètre</th>
+                <th style={{ width: 140 }}>Montant</th>
+                <th style={{ width: 130 }}>Monnaie</th>
+                <th>Équivalent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {KEYS_ORDER.map(cle => {
+                const e = edits[cle]
+                if (!e) return null
+                const v = parseFloat(e.valeur) || 0
+                const equivPropre = toPropre(v, e.monnaie)
+                const equivSale   = toSale(v, e.monnaie)
+                return (
+                  <tr key={cle}>
+                    <td style={{ fontWeight: 500 }}>{KEYS_LABELS[cle]}</td>
+                    <td>
+                      <input className="form-input" type="number" min="0" step="0.01"
+                        style={{ width: 110, padding: '4px 8px', fontSize: 13 }}
+                        value={e.valeur}
+                        onChange={ev => handleChange(cle, 'valeur', ev.target.value)} />
+                    </td>
+                    <td>
+                      <select className="form-select" style={{ minWidth: 110 }}
+                        value={e.monnaie}
+                        onChange={ev => handleChange(cle, 'monnaie', ev.target.value)}>
+                        <option value="propre">propre</option>
+                        <option value="sale">sale</option>
+                      </select>
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--texte-soft)' }}>
+                      {e.monnaie === 'propre'
+                        ? `≈ ${fmtMt(equivSale)} $ sale`
+                        : `≈ ${fmtMt(equivPropre)} $ propre`}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <button className="btn btn-solid" style={{ marginTop: 16 }} disabled={saving} onClick={handleSave}>
+          {saving ? 'Enregistrement…' : 'Enregistrer & recalculer la semaine'}
+        </button>
+      </div>
+
+      {/* Simulateur */}
+      <div className="card">
+        <div className="card-title">Simulateur de rentabilité</div>
+        <div style={{ fontSize: 12, color: 'var(--texte-soft)', marginBottom: 14 }}>
+          La taxe fertilisant ({fmtSale(toSale(params.branche_prix_fertilisant_semaine.valeur, params.branche_prix_fertilisant_semaine.monnaie))} sale / semaine) est répartie entre tous les pots produits durant la semaine.
+          Plus de pots → moins de taxe par pot.
+        </div>
+        <div className="grid-3" style={{ gap: 14, marginBottom: 16 }}>
+          <div className="form-group">
+            <label className="form-label">Nombre de pots</label>
+            <input className="form-input" type="number" min="0" value={sim.nb_pots}
+              onChange={e => setSim(s => ({ ...s, nb_pots: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Nombre de branches produites</label>
+            <input className="form-input" type="number" min="0" value={sim.nb_branches}
+              onChange={e => setSim(s => ({ ...s, nb_branches: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Total pots semaine (avec celui-ci)</label>
+            <input className="form-input" type="number" min="0" value={sim.total_pots_semaine}
+              onChange={e => setSim(s => ({ ...s, total_pots_semaine: e.target.value }))} />
+            <div style={{ fontSize: 11, color: 'var(--texte-soft)', marginTop: 4 }}>
+              Actuel (semaine en cours) : <strong>{totalPotsSem}</strong> pots
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ background: 'rgba(76,175,125,0.08)', border: '1px solid rgba(76,175,125,0.35)', borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--texte-soft)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Profit total</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: sim_profit >= 0 ? '#4caf7d' : '#e05555', marginTop: 4 }}>
+              {fmtSale(sim_profit)}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--texte-soft)' }}>sale, arrondi inférieur</div>
+          </div>
+          <div style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--or-border)', borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--texte-soft)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Profit / branche</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--or-pale)', marginTop: 4 }}>
+              {fmtMt(sim_par_branche)} $
+            </div>
+          </div>
+          <div style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid var(--or-border)', borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--texte-soft)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Profit / pot</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--or-pale)', marginTop: 4 }}>
+              {fmtMt(sim_par_pot)} $
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
